@@ -27,3 +27,6 @@ Más detalles de uso en [LEEME_IMAGENES.txt](LEEME_IMAGENES.txt).
 
 Este Estudio también viene integrado en [Audio Novela Studio](https://github.com/jyuniorjp/AudioNovelaStudio),
 donde crea los fondos de los videos.
+
+## Licencia
+MIT: puedes usar, copiar y modificar este código mientras mantengas el aviso de autor. Ver [LICENSE](LICENSE). Las fuentes de `fuentes/` usan la licencia SIL OFL 1.1.
