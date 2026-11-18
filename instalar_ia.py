@@ -62,6 +62,9 @@ F = {
 VCREDIST_BYTES = 19_000_000
 OLLAMA_MODEL = "qwen3:4b-instruct-2507-q4_K_M"
 OLLAMA_MODEL_BYTES = 2_500_000_000
+VISION_MODEL = "gemma4:e4b-it-qat"            # la IA que ve: revisa las imágenes, juzga miniaturas, mira referencias
+VISION_MODEL_BYTES = 6_150_000_000
+OLLAMA_SETUP_BYTES = 1_860_000_000
 
 # paquetes que ve el usuario
 PACKS = {
@@ -86,6 +89,10 @@ PACKS = {
     "ollama": dict(title="Asistente de descripciones (Ollama + Qwen3 4B)", default=True, files=[],
                    what="Entiende lo que escribes en español, elige el mejor modelo y le escribe la descripción. "
                         "Sin él, escribe en inglés y elige el modelo a mano."),
+    "vision": dict(title="Revisor de imágenes: Gemma 4 (la IA que ve)", default=True, files=[],
+                   what="Mira cada imagen y revisa que tenga lo que pediste (si falta algo, la repite), califica "
+                        "las miniaturas y entiende tus imágenes de referencia. Sin él todo funciona, pero sin "
+                        "revisión."),
 }
 
 
@@ -247,7 +254,11 @@ def pack_bytes(keys, base=None):
         if k == "base" and not vcredist_ok():
             total += VCREDIST_BYTES
         if k == "ollama" and not ollama_has_model():
-            total += OLLAMA_MODEL_BYTES + (0 if ollama_installed() else 1_860_000_000)
+            total += OLLAMA_MODEL_BYTES
+        if k == "vision" and not ollama_has_model(VISION_MODEL):
+            total += VISION_MODEL_BYTES
+    if ("ollama" in keys or "vision" in keys) and not ollama_installed():
+        total += OLLAMA_SETUP_BYTES                 # el programa Ollama se baja una sola vez
     return total
 
 
@@ -380,7 +391,7 @@ def _ollama_start():
                 pass
 
 
-def install_ollama(base, say, cancel):
+def install_ollama(base, say, cancel, models=(OLLAMA_MODEL,)):
     if not ollama_installed():
         url, sub, name, size = F["ollama_setup"]
         dest = os.path.join(base, sub, name)
@@ -398,26 +409,28 @@ def install_ollama(base, say, cancel):
             time.sleep(1)
     if not ollama_running():
         raise RuntimeError("Ollama quedó instalado pero no arrancó. Ábrelo desde el menú Inicio y vuelve a intentar.")
-    if ollama_has_model():
-        return
-    req = urllib.request.Request("http://127.0.0.1:11434/api/pull",
-                                 json.dumps({"model": OLLAMA_MODEL, "stream": True}).encode(),
-                                 {"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=3600) as r:
-        for line in r:
-            if cancel is not None and cancel.is_set():
-                raise Cancelled()
-            try:
-                d = json.loads(line)
-            except ValueError:
-                continue
-            if d.get("error"):
-                raise RuntimeError("Ollama: " + d["error"])
-            if d.get("total"):
-                say(f"Bajando el asistente Qwen3 4B… {d.get('completed', 0) / GB:.2f} de {d['total'] / GB:.2f} GB",
-                    d.get("completed", 0) / d["total"])
-    if not ollama_has_model():
-        raise RuntimeError("El asistente no terminó de bajarse.")
+    names = {OLLAMA_MODEL: "el asistente Qwen3 4B", VISION_MODEL: "el revisor Gemma 4"}
+    for model in models:
+        if ollama_has_model(model):
+            continue
+        req = urllib.request.Request("http://127.0.0.1:11434/api/pull",
+                                     json.dumps({"model": model, "stream": True}).encode(),
+                                     {"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=3600) as r:
+            for line in r:
+                if cancel is not None and cancel.is_set():
+                    raise Cancelled()
+                try:
+                    d = json.loads(line)
+                except ValueError:
+                    continue
+                if d.get("error"):
+                    raise RuntimeError("Ollama: " + d["error"])
+                if d.get("total"):
+                    say(f"Bajando {names.get(model, model)}… {d.get('completed', 0) / GB:.2f} de "
+                        f"{d['total'] / GB:.2f} GB", d.get("completed", 0) / d["total"])
+        if not ollama_has_model(model):
+            raise RuntimeError(f"No terminó de bajarse {names.get(model, model)}.")
 
 
 # ------------------------------------------------------------------ instalación completa
@@ -519,8 +532,9 @@ def install(base, keys, say=None, cancel=None):
             seen.add(fk)
             grab(fk)
     # 5) asistente
-    if "ollama" in keys:
-        install_ollama(base, say, cancel)
+    models = [m for k, m in (("ollama", OLLAMA_MODEL), ("vision", VISION_MODEL)) if k in keys]
+    if models:
+        install_ollama(base, say, cancel, models)
     say("Instalación completa.", 1.0)
     return comfy
 

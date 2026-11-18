@@ -24,6 +24,7 @@ TU IA REVISA CADA IMAGEN
   otra vez reforzando eso y se queda con la mejor. Debajo de «Crear» ves qué revisó y si algo aún falta.
   En las miniaturas se revisan el fondo y cada personaje por separado; las versiones B y C tienen su propio fondo.
   Cuesta unos 15-30 s más por imagen (y otra imagen si hubo que repetir).
+  En otra PC, Gemma se instala con el paquete «Revisor de imágenes: Gemma 4» (opcional, ~6 GB).
 
 DÓNDE Y CÓMO SE GUARDAN
   Abajo a la izquierda eliges la carpeta y el formato (PNG sin pérdida, JPG, WEBP, BMP o TIFF). «Guardar como…»

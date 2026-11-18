@@ -34,3 +34,6 @@ modelos/
 
 # copia para el repositorio aparte del Estudio de Imágenes
 publicar/
+
+# videos de promoción
+*.mp4
