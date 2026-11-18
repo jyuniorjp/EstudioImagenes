@@ -587,12 +587,13 @@ class ThumbEditor(ctk.CTkToplevel):
                 continue
             row = ctk.CTkFrame(self.txt_box, fg_color=SURF2, corner_radius=8)
             row.pack(fill="x", pady=2)
-            v = ctk.StringVar(value=lay["text"])
+            # un título en varias líneas se muestra con « / » (la casilla es de una línea) y se vuelve a partir igual
+            v = ctk.StringVar(value=lay["text"].replace("\n", " / "))
             e = ctk.CTkEntry(row, textvariable=v, fg_color=SURF3, border_width=0, font=font(13, "bold"))
             e.pack(side="left", fill="x", expand=True, padx=6, pady=6)
 
             def changed(*_a, lay=lay, v=v):
-                lay["text"] = v.get()
+                lay["text"] = "\n".join(p.strip() for p in v.get().split(" / ")) if " / " in v.get() else v.get()
                 self.refresh()
             v.trace_add("write", changed)
             e.bind("<FocusIn>", lambda _e, i=i: (setattr(self, "sel", i), self.refresh()))
