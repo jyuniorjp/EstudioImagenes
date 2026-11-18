@@ -842,7 +842,8 @@ def plan(text, style="Automático", engine=AUTO, model=None, have=None, already_
                  "\"must\": 2-5 very short English checks a viewer can verify in the finished picture, the most "
                  "important things the user asked for (gender only for HUMAN people the user describes, never for "
                  "creatures or Pokémon; then key objects, creatures "
-                 "with their material and colors, setting), e.g. [\"a woman\", \"a dragon made of blue crystal\"]; "
+                 "with their material and colors, setting), taken ONLY from this user's request (never invent or "
+                 "copy anything else); "
                  "\"reason\": short Spanish sentence saying what kind of image it is}. kind=anime if the user "
                  "wants anime/manga style or names an anime/game character; text if words must be readable in the "
                  "image; photo for realistic photos; art otherwise. If text_in_image is not empty, include it in "
@@ -966,13 +967,36 @@ def plan(text, style="Automático", engine=AUTO, model=None, have=None, already_
     return dict(engine=eng, prompt=prompt, negative=neg, kind=kind, reason=reason,
                 text_in_image=info.get("text_in_image", ""), title=title if thumb else "",
                 title_style=_title_style(text) if thumb else "", strength=strength, fandom=fandom, gender=gender,
-                must=_must_list(info.get("must"), gender))
+                must=_must_list(info.get("must"), gender, " ".join((text, prompt, str(info.get("prompt") or "")))))
 
 
-def _must_list(must, gender=""):
+_GENERIC_W = {"with", "made", "from", "that", "this", "very", "glowing", "bright", "large", "small", "holding",
+              "wearing", "color", "colors", "colored", "scene", "image", "picture", "visible", "showing", "background",
+              "there", "their", "into", "huge", "giant", "big", "dark", "light", "long", "short", "style"}
+
+
+def relevant_checks(checks, *refs):
+    """Solo las revisiones que salen de TU pedido: cada una debe compartir al menos una palabra importante con el
+    texto de referencia (la descripción en inglés que hizo Qwen y tu texto). Antes Qwen copió ejemplos de sus
+    instrucciones («a dragon made of blue crystal») y la app «reforzaba» un dragón en el dibujo de un titán."""
+    import re
+    ref = " ".join(str(r) for r in refs).lower()
+    out = []
+    for c in checks or []:
+        # TODAS las palabras importantes deben estar en tu pedido («blue eyes» no pasa si pediste ojos dorados)
+        words = [w for w in re.findall(r"[a-záéíóúñ]+", str(c).lower()) if len(w) >= 3 and w not in _GENERIC_W
+                 and w not in ("the", "and", "her", "his", "its", "has", "are", "one", "two")]
+        if words and all(w[:5] in ref for w in words):
+            out.append(str(c).strip())
+    return out
+
+
+def _must_list(must, gender="", ref=""):
     """Lo que Gemma revisa en el dibujo terminado (el género siempre, si lo dijiste)."""
     import re
     out = [str(x).strip() for x in (must if isinstance(must, list) else []) if str(x).strip()][:5]
+    if ref:
+        out = relevant_checks(out, ref)
     gw = re.compile(r"(woman|man|girl|boy|female|male|person|character)$|\b(woman|man|girl|boy|female|male)\b")
     if not gender:            # no dijiste el género de una persona: la IA no lo inventa (p. ej. un Pokémon)
         out = [m for m in out if not gw.search(m.lower())]
@@ -1275,7 +1299,7 @@ def critique_thumbnail(path, model=None, keep_alive=0):
 
 def verify_image(path, checks, model=None, keep_alive="3m"):
     """La IA que ve (Gemma, el juez rápido) revisa si el dibujo tiene lo que pediste. checks: frases cortas en
-    inglés («a woman», «a dragon made of blue crystal»). Devuelve la lista de lo que FALTA ([] si está todo o si
+    inglés («a woman», «a red cape»). Devuelve la lista de lo que FALTA ([] si está todo o si
     no se pudo revisar: nunca frena el trabajo)."""
     import base64
     import io as _io

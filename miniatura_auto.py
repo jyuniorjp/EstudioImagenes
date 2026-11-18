@@ -48,14 +48,14 @@ def thumb_plan(text, model=None, saved_names=()):
         "dragon = one solid dragon sculpted from translucent icy-blue crystal glowing from inside, not a mosaic, not "
         "stained glass), NO people, NO main characters, keep the area where the title goes simple, max 120 words; "
         "\"background_must\": 2-5 very short English checks a viewer can verify in the background picture "
-        "(e.g. \"a dragon made of blue crystal\", \"glowing blue eyes\", \"a burning valley\"); "
+        "taken ONLY from this user's request (never invent or copy anything else); "
         "\"characters\": list (max 3) of the MAIN foreground figures, each {\"desc\": English description of the "
         "figure (gender, age, hair, eyes, clothes, armor, weapon, pose, expression, effects like aura), max 70 "
         "words, \"tags\": Danbooru tags for an anime model starting with 1girl or 1boy, solo, \"gender\": \"male\" or "
         "\"female\" or \"\", \"name\": famous character name or \"\", \"series\": its anime/game or \"\", "
         "\"position\": \"left\" or \"right\" or \"center\" (exactly where the user put it), \"size\": \"large\" or \"medium\", "
-        "\"must\": 2-5 very short English checks for this figure (gender first, e.g. \"a woman\", \"long silver "
-        "hair\", \"a torn red cape\", \"holding a glowing sword\")}; [] if there is no "
+        "\"must\": 2-5 very short English checks for this figure, gender first, taken ONLY from what the user "
+        "wrote about this figure}; [] if there is no "
         "main figure; "
         "\"title\": the title text the user wants written (exact words) or \"\"; \"subtitle\": second smaller text or "
         "\"\"; \"style\": one of \"Impacto\", \"Aura roja\", \"Oro y rojo\", \"Cromo épico\", \"Neón\", \"Elegante\", "
@@ -74,13 +74,15 @@ def thumb_plan(text, model=None, saved_names=()):
         out["background"] = str(d["background"])
     else:
         out["background"] = ia.to_english(text, model) + ", no people"
-    out["background_must"] = [str(x) for x in d.get("background_must") or [] if str(x).strip()][:5] \
-        if isinstance(d.get("background_must"), list) else []
+    out["background_must"] = ia.relevant_checks(
+        [str(x) for x in d.get("background_must") or [] if str(x).strip()][:5]
+        if isinstance(d.get("background_must"), list) else [], out["background"], text)
     chars = d.get("characters") if isinstance(d.get("characters"), list) else []
     out["characters"] = [c for c in chars if isinstance(c, dict) and (c.get("desc") or c.get("tags"))][:3]
     for c in out["characters"]:
-        c["must"] = [str(x) for x in c.get("must") or [] if str(x).strip()][:5] \
-            if isinstance(c.get("must"), list) else []
+        c["must"] = ia.relevant_checks([str(x) for x in c.get("must") or [] if str(x).strip()][:5]
+                                       if isinstance(c.get("must"), list) else [],
+                                       c.get("desc", ""), c.get("tags", ""), text)
         for k in ("desc", "tags", "name", "series", "gender", "position", "size"):
             if isinstance(c.get(k), list):
                 c[k] = ", ".join(str(x) for x in c[k])
@@ -283,7 +285,7 @@ _CHAR_NEG = ("cropped, out of frame, cut off, scenery, detailed background, sky,
              "wind effects, floating particles, frame, border")
 
 
-def build(text, say=None, cancel=None, have=None, refs=(), screen=None, versions=1):
+def build(text, say=None, cancel=None, have=None, refs=(), screen=None, versions=1, on_plan=None):
     """Hace todo. Devuelve (proyecto, plan). say(mensaje, fracción).
     refs: tus imágenes de referencia. Las PNG con fondo transparente se usan como personajes tal cual; la primera
     imagen normal es la base del fondo (se redibuja a partir de ella)."""
@@ -301,6 +303,11 @@ def build(text, say=None, cancel=None, have=None, refs=(), screen=None, versions
     say("Tu IA separa el pedido en capas (fondo, personajes, título)…", .02)
     saved = find_saved(text)
     tp = thumb_plan(text, model, tuple(saved))
+    if on_plan:                                   # la app muestra al instante lo que se va a dibujar (en inglés)
+        try:
+            on_plan(tp)
+        except Exception:
+            pass
     spec = tp.get("title_spec") or ia.title_spec(text)
     if ref_chars and len(tp["characters"]) < len(ref_chars):      # tus PNG transparentes son personajes
         tp["characters"] += [{"desc": "", "position": ""} for _ in range(len(ref_chars) - len(tp["characters"]))]

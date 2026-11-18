@@ -609,9 +609,16 @@ class ImageStudio(ctk.CTkFrame):
         try:
             self._ui(lambda: self.lbl_why.configure(text="Pediste una miniatura: la armo por capas (fondo, personajes "
                                                          "con fondo transparente y título con letras perfectas)."))
+            def show_plan(tp):
+                gen_es = {"female": "mujer", "male": "hombre"}
+                txt = ("FONDO: " + tp.get("background", "") + "\n\nPERSONAJES:\n" +
+                       ("\n".join("• " + (f"[{gen_es[c['gender']]}] " if c.get("gender") in gen_es else "") +
+                                  str(c.get("desc") or "") for c in tp.get("characters", [])) or "sin personajes") +
+                       (f"\n\nTÍTULO: «{tp['title']}»" if tp.get("title") else ""))
+                self._ui(lambda: (self.en.delete("1.0", "end"), self.en.insert("1.0", txt)))
             proj, tp = miniatura_auto.build(prompt, say, self.cancel, have=self.avail,
                                             refs=list(getattr(self, "refs", []) or []),
-                                            versions=max(1, min(3, int(self.v_n.get()))))
+                                            versions=max(1, min(3, int(self.v_n.get()))), on_plan=show_plan)
             self.started_server = True
             out_dir, ext = self.out_dir, M.EXT_BY_NAME.get(self.v_sfmt.get(), ".png")
             os.makedirs(out_dir, exist_ok=True)
@@ -1089,7 +1096,8 @@ class ImageStudio(ctk.CTkFrame):
 
     def _work(self, prompt, translate, english, opts):
         def say(msg, f):
-            self._ui(lambda: (self.pb.set(max(0.0, min(1.0, f))), self._status(msg)))
+            # f=None: aviso sin porcentaje («Tu IA revisa…»): la barra se queda donde estaba
+            self._ui(lambda: (self.pb.set(max(0.0, min(1.0, f))) if f is not None else None, self._status(msg)))
         try:
             if opts.get("auto_thumb"):
                 return self._work_thumb(prompt, say)
