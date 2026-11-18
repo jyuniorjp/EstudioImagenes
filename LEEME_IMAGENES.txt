@@ -1,0 +1,77 @@
+ESTUDIO DE IMÁGENES 1.0.0  -  Kuon Studio
+Crea imágenes con IA en tu PC, sin internet, usando tu tarjeta NVIDIA.
+
+PRIMERA VEZ
+  Si esta PC no tiene el motor de imágenes, la app muestra «Instalar imágenes con IA…». Ahí ves tu tarjeta,
+  qué se descarga, cuánto pesa y para qué sirve cada parte. Un botón lo baja e instala todo y hace una imagen
+  de prueba. Si se corta internet, vuelve a pulsar el botón: sigue donde quedó.
+  Necesitas: tarjeta NVIDIA de 4 GB o más (mejor 6 GB), controlador NVIDIA 580 o más nuevo, 16 GB de RAM
+  recomendados y unos 20 GB libres para lo recomendado.
+
+CÓMO SE USA
+  1. Describe la imagen en español (o toca «💡 Ejemplos y consejos» y elige un ejemplo).
+  2. Deja el modelo en «Automático (la IA elige)»: anime -> Animagine XL 4; fotos, arte y texto -> Z-Image Turbo.
+     Personajes con nombre de anime o videojuego (Pokémon, Genshin, Naruto…) -> Animagine, que los conoce por miles
+     de dibujos (Z-Image no los conoce y los inventa). Tu IA (Ollama) se abre sola si estaba cerrada.
+  3. Elige estilo, medida (1:1, 3:4, 16:9, 9:16, 21:9… o personalizada) y cuántas.
+  4. «Crear imagen». Se guardan en Imágenes\Imagenes IA. «Otra parecida» hace otra versión; «Más detalle» la
+     agranda 1,5x y repasa los detalles.
+  Tiempos aproximados (RTX 3060 6 GB): anime ~30 s, Z-Image ~55 s, la primera de la sesión ~40 s más.
+
+TU IA REVISA CADA IMAGEN
+  Qwen saca de tu pedido lo que debe verse (el género de cada persona, los objetos, las criaturas con su material
+  y color). Al terminar cada imagen, Gemma (la IA que ve) la mira y revisa esa lista; si falta algo, la dibuja
+  otra vez reforzando eso y se queda con la mejor. Debajo de «Crear» ves qué revisó y si algo aún falta.
+  En las miniaturas se revisan el fondo y cada personaje por separado; las versiones B y C tienen su propio fondo.
+  Cuesta unos 15-30 s más por imagen (y otra imagen si hubo que repetir).
+
+DÓNDE Y CÓMO SE GUARDAN
+  Abajo a la izquierda eliges la carpeta y el formato (PNG sin pérdida, JPG, WEBP, BMP o TIFF). «Guardar como…»
+  y el editor de miniaturas te dejan elegir carpeta, nombre y formato cada vez.
+  Descripciones largas: se traducen completas; si ya están en inglés se usan tal cual (tu IA solo añade etiquetas,
+  el género y los colores). Las escenas con muchos elementos y sin personaje famoso van a Z-Image.
+  Si pides un título entre comillas en una miniatura, la imagen sale sin letras y aparece «🎬 Poner el título…».
+
+MINIATURA AUTOMÁTICA
+  Escribe «Miniatura de YouTube…» con el fondo, los personajes (dónde van y si son grandes o pequeños) y el título
+  entre comillas, con el modelo en Automático. Se arma sola por capas: fondo, personajes con fondo transparente y
+  luz de borde, y el título con letras perfectas (2-4 min). Luego «🎬 Abrir las capas en el editor» para ajustar.
+  Tus PNG con fondo transparente (personajes, logos) se usan tal cual en el editor.
+  El título va donde lo pidas («a la derecha», «abajo»…) y con tus colores («letras blancas con borde naranja
+  grueso»). Si dijiste dónde va cada cosa, las versiones B y C no lo cambian.
+  Los personajes se dibujan sobre una «pantalla» de color y se recortan con BiRefNet (silueta completa: pelo,
+  capa, espada). «Fondo para recortar personajes»: Automático (verde; azul si el personaje lleva verde; magenta
+  si lleva verde y azul), Verde, Azul, Magenta o Blanco. Si el recorte sale como un cuadro, se dibuja otra vez.
+
+MÁS HERRAMIENTAS
+  «📎 Subir imágenes de referencia» (hasta 3, o Ctrl+V para pegar una copiada): tu IA mira la primera y escribe
+  cómo debe quedar con los cambios que pidas («ponle el pelo rojo», «de noche»…); las otras sirven de inspiración.
+  «Mi IA decide cuánto cambiar» o el control manual (se parece ↔ solo inspiración). En una miniatura automática,
+  los PNG transparentes son personajes y la primera imagen normal es la base del fondo.
+  «⋯ Más» sobre tus imágenes: ampliar 2x/4x, quitar el fondo, usar como referencia, revisar como miniatura.
+  Miniatura automática con «Cuántas» en 2 o 3: hace versiones A/B/C y tu IA recomienda la mejor.
+  Editor: «💾 Guardar personaje» y «Mis personajes guardados». Si nombras un personaje guardado en una miniatura
+  automática («Lyra a la izquierda…»), se usa tal cual, sin volver a dibujarlo.
+
+MINIATURAS PARA YOUTUBE («🎬 Editor de miniaturas»)
+  1. Elige una plantilla (Épico, Impacto, Reacción, Película).
+  2. Fondo: descríbelo y «Crear con IA», o súbelo.
+  3. Personaje: descríbelo (di «chico» o «chica») y elige entre 4 opciones; o sube tu foto. El fondo se quita solo.
+  4. Escribe tus textos; lo que va entre *asteriscos* sale en el color de acento. Arrastra todo en la vista.
+  5. «Guardar PNG»: sin pérdida, en Imágenes\Imagenes IA\Miniaturas (si pasa de 2 MB, también un JPG para YouTube).
+  «Analizar imagen…»: tu IA mira una miniatura que te guste y propone fondo, personaje y texto parecidos.
+
+ATAJOS DE TECLADO (botón ⌨ o Ctrl+K)
+  Ctrl+Enter crear · Esc cancelar · Ctrl+V pegar imagen como referencia · Ctrl+O subir referencias ·
+  Ctrl+S guardar como · Ctrl+D otra parecida · Ctrl+E editor de miniaturas · Ctrl+U ampliar 2x ·
+  Ctrl+B quitar fondo · Ctrl+R revisar · Ctrl+1 / Ctrl+2 páginas · ← → imagen anterior/siguiente ·
+  Ctrl+Shift+O abrir carpeta · F1 ejemplos · F11 pantalla completa.
+  Editor: Ctrl+Z deshacer · Ctrl+Y rehacer · Supr borrar capa · flechas mover (Shift: más) · + / − tamaño ·
+  Tab siguiente capa · Ctrl+D duplicar · Ctrl+H espejo · RePág/AvPág orden · Ctrl+S guardar imagen ·
+  Ctrl+Shift+S guardar proyecto · Ctrl+O abrir proyecto.
+
+TEMA DEL ICONO
+  Neón, Atardecer, Sakura, Galaxia o Minimal: se elige al instalar y se cambia abajo a la izquierda en la app
+  (cambia la ventana y los accesos directos).
+
+Al desinstalar no se borran tus imágenes ni el motor y los modelos descargados.

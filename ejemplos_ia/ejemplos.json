@@ -1,0 +1,112 @@
+[
+ {
+  "file": "ejemplo_00.jpg",
+  "title": "Personaje anime",
+  "prompt_es": "Chica de anime de cabello plateado y ojos violetas, uniforme escolar, bajo los cerezos en flor, viento suave, luz de atardecer",
+  "style": "Automático",
+  "format": "Vertical 2:3 (póster)",
+  "engine": "Anime (Animagine XL 4)",
+  "prompt_en": "1girl, silver hair, violet eyes, school uniform, cherry blossoms, sunset, wind, anime, outdoor, gentle lighting, soft background, peaceful atmosphere, masterpiece, high score, great score, absurdres",
+  "seed": 1000,
+  "seconds": 33
+ },
+ {
+  "file": "ejemplo_01.jpg",
+  "title": "Fondo de audionovela (anime)",
+  "prompt_es": "Pasillo de colegio japonés vacío al atardecer, luz dorada entrando por las ventanas, polvo en el aire, estilo anime, sin personas",
+  "style": "Anime",
+  "format": "Horizontal 16:9 (video, YouTube)",
+  "engine": "Anime (Animagine XL 4)",
+  "prompt_en": "no humans, scenery, school hallway, sunset, golden light, dust, anime, realistic style, warm tones, soft lighting, elegant architecture, empty space, masterpiece, high score, great score, absurdres",
+  "seed": 1001,
+  "seconds": 38
+ },
+ {
+  "file": "ejemplo_02.jpg",
+  "title": "Foto realista",
+  "prompt_es": "Foto realista de un anciano pescador en el lago Titicaca al amanecer, neblina sobre el agua, primer plano, luz cálida",
+  "style": "Automático",
+  "format": "Vertical 3:4 (retrato)",
+  "engine": "Alta calidad (Z-Image Turbo)",
+  "prompt_en": "A realistic elderly fisherman standing in the shallow water of Lake Titicaca at dawn, soft golden light filtering through a thick mist above the surface. Close-up view, water shimmering with early morning reflections, natural textures of his weathered clothes and hands. Warm, soft lighting, serene and peaceful atmosphere, with a quiet, isolated landscape.",
+  "seed": 1002,
+  "seconds": 59
+ },
+ {
+  "file": "ejemplo_03.jpg",
+  "title": "Paisaje de cine",
+  "prompt_es": "Foto panorámica de cine: montañas nevadas de los Andes al amanecer, valle con niebla, un cóndor volando a lo lejos",
+  "style": "Realista / cine",
+  "format": "Panorámica 21:9 (cine)",
+  "engine": "Alta calidad (Z-Image Turbo)",
+  "prompt_en": "A realistic cinematic wide-angle panorama of the Andes mountains at dawn, with snow-capped peaks glowing in soft golden light, a misty valley below, and a vulture soaring in the distance. Clear skies, natural textures, morning fog, dramatic yet serene atmosphere. Shot with a cinematic lens, high detail, natural colors, realistic lighting, cinematic photo, 35mm, shallow depth of field, dramatic light, film grain",
+  "seed": 1003,
+  "seconds": 47
+ },
+ {
+  "file": "ejemplo_04.jpg",
+  "title": "Texto en la imagen",
+  "prompt_es": "Letrero de neón en una calle lluviosa de noche que diga \"KUON STUDIO\", reflejos en el asfalto mojado",
+  "style": "Automático",
+  "format": "Horizontal 16:9 (video, YouTube)",
+  "engine": "Alta calidad (Z-Image Turbo)",
+  "prompt_en": "A neon sign reading 'KUON STUDIO' shines brightly in a rainy night street, with wet asphalt reflecting vibrant red and blue hues. The scene features soft, cool ambient lighting, deep shadows, and a cinematic atmosphere. Realistic urban details, sharp reflections, and dynamic raindrops enhance the mood. Close-up composition with a low angle.",
+  "seed": 1004,
+  "seconds": 50
+ },
+ {
+  "file": "ejemplo_05.jpg",
+  "title": "Portada con título",
+  "prompt_es": "Portada de libro de misterio: una mansión abandonada entre la niebla, luna llena, con el título \"LA ÚLTIMA PUERTA\" arriba en letras grandes",
+  "style": "Oscuro / misterio",
+  "format": "Vertical 2:3 (póster)",
+  "engine": "Alta calidad (Z-Image Turbo)",
+  "prompt_en": "A mysterious, abandoned mansion half-buried in thick fog, under a full moon, with cold, eerie lighting and deep shadows. The title 'LA ÚLTIMA PUERTA' is prominently displayed at the top in bold, elegant, handwritten font. The scene is dark, atmospheric, with a moody, cinematic composition, emphasizing isolation and suspense. Realistic photography style with high detail and natural textures, dark moody atmosphere, fog, low key lighting, mysterious, cinematic",
+  "seed": 1005,
+  "seconds": 48
+ },
+ {
+  "file": "ejemplo_06.jpg",
+  "title": "Arte fantástico",
+  "prompt_es": "Un dragón de cristal azul volando sobre un volcán en erupción, pintura épica, mucho detalle",
+  "style": "Ilustración fantástica",
+  "format": "Horizontal 3:2 (foto)",
+  "engine": "Alta calidad (Z-Image Turbo)",
+  "prompt_en": "A majestic blue crystal dragon soaring above an erupting volcano, rendered in epic painting style with intricate details: glowing blue crystal scales, fiery lava flows, dramatic contrasts of light and shadow, vibrant red and orange volcanic hues against a deep purple sky, dynamic composition with wide-angle perspective, rich textures, and fine brushwork, epic fantasy digital painting, dramatic lighting, highly detailed",
+  "seed": 1006,
+  "seconds": 49
+ },
+ {
+  "file": "ejemplo_07.jpg",
+  "title": "Acuarela",
+  "prompt_es": "Pueblo andino con casas de adobe y techos rojos, flores, niños jugando a lo lejos, acuarela suave",
+  "style": "Acuarela",
+  "format": "Horizontal 4:3",
+  "engine": "Alta calidad (Z-Image Turbo)",
+  "prompt_en": "A serene Andean village with adobe houses and red tiled roofs, surrounded by soft flowers and children playing in the distance. Gentle watercolor style with light, airy brushstrokes, soft pastel colors, and natural sunlight filtering through the clouds. Composition centered on the village, with a peaceful, idyllic atmosphere, soft watercolor illustration, pastel colors, paper texture",
+  "seed": 1007,
+  "seconds": 46
+ },
+ {
+  "file": "ejemplo_08.jpg",
+  "title": "Short vertical",
+  "prompt_es": "Ciudad futurista de noche con rascacielos y luces de neón moradas y azules, lluvia, vista desde abajo",
+  "style": "Automático",
+  "format": "Vertical 9:16 (Shorts, TikTok)",
+  "engine": "Alta calidad (Z-Image Turbo)",
+  "prompt_en": "A futuristic city at night, towering skyscrapers illuminated by vibrant magenta and blue neon lights, light rain falling softly, viewed from a low angle with reflective surfaces and wet streets, dynamic cityscape with glowing signs and ambient fog, cinematic lighting, hyperrealistic details, wide-angle shot, urban atmosphere, deep shadows and highlights",
+  "seed": 1008,
+  "seconds": 48
+ },
+ {
+  "file": "ejemplo_09.jpg",
+  "title": "Avatar / icono",
+  "prompt_es": "Retrato de un zorro astronauta con casco espacial, fondo de estrellas, ilustración digital colorida, centrado",
+  "style": "Automático",
+  "format": "Cuadrado 1:1",
+  "engine": "Alta calidad (Z-Image Turbo)",
+  "prompt_en": "A colorful digital illustration of a fox astronaut wearing a space helmet, centered, with a starry background, vibrant colors, soft glowing stars, and a cosmic atmosphere, balanced composition, warm and cool color contrast, detailed fur texture, realistic fur with subtle shine, subtle lighting from the stars",
+  "seed": 1009,
+  "seconds": 50
+ }
+]

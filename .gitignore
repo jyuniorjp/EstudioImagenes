@@ -1,0 +1,36 @@
+# entorno y compilados
+.venv/
+__pycache__/
+*.pyc
+build/
+build_imagenes/
+dist/
+dist_imagenes/
+*.exe
+*_log.txt
+*.log
+
+# Android (por ahora no se publica) y firmas: NUNCA se suben
+Android/
+*.apk
+*.jks
+*.keystore
+*.p12
+
+# archivos personales y de pruebas
+Audios/
+archivos para pruevas/
+pruebas/
+reports/
+research_notes/
+HISTORIAL.txt
+
+# modelos grandes de terceros (se descargan aparte)
+voz/
+modelos/
+*.onnx
+*.gguf
+*.safetensors
+
+# copia para el repositorio aparte del Estudio de Imágenes
+publicar/

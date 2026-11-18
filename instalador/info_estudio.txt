@@ -1,0 +1,36 @@
+﻿QUÉ SE INSTALA Y QUÉ SE DESCARGA DESPUÉS
+
+AHORA (este instalador, 27 MB)
+  • La app, sus iconos, 10 ejemplos, el editor de miniaturas
+    y sus fuentes (Anton, Bebas Neue, Cinzel, Montserrat, Bangers).
+
+AL ABRIR LA APP POR PRIMERA VEZ
+Si esta PC no tiene el motor de imágenes, se abre sola una ventana
+que revisa tu tarjeta, explica cada parte con su peso y la instala
+con un botón. Si se corta internet, sigue donde quedó.
+
+  Obligatorio
+  • Componentes de Windows (Visual C++)    19 MB, solo si faltan
+  • Motor ComfyUI + extensión GGUF        2,1 GB (6,4 GB instalado)
+  • Recortador de fondos (miniaturas)     0,35 GB
+
+  Recomendado (ya marcado)
+  • Z-Image Turbo: fotos, arte, texto     8,5 GB
+  • Animagine XL 4: anime y manga         6,5 GB
+  • Asistente Ollama + Qwen3 4B           4,3 GB
+
+  Opcional
+  • Juggernaut XL (fotos rápidas)         6,6 GB
+  • FLUX schnell + dev                   15,9 GB
+
+  Lo recomendado ocupa unos 21 GB
+  (~50 min con internet de 50 Mbps).
+
+NECESITAS
+  • Windows 10 u 11 de 64 bits.
+  • Tarjeta NVIDIA de 4 GB o más (mejor 6 GB),
+    controlador 580 o más nuevo.
+  • 16 GB de RAM recomendados.
+
+Después todo funciona sin internet.
+Tus imágenes se guardan en Imágenes\Imagenes IA.
