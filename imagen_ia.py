@@ -633,16 +633,18 @@ def _quoted(text):
     return max(m, key=len).strip() if m else ""
 
 
-def _title_window(text):
+def _title_window(text, quote=None):
     """Solo la parte del pedido que habla del título (antes se buscaba en TODO el texto y «silver hair» volvía las
-    letras cromadas). Toma las 2 frases cortas de antes de las comillas y lo que sigue hasta el punto."""
+    letras cromadas). Toma las 2 frases cortas de antes de las comillas y lo que sigue hasta el punto.
+    quote: qué texto entre comillas (por defecto el título, el más largo; antes se usaba el ÚLTIMO y un
+    subtítulo «Debajo del título…: "CAP 1-5"» mandaba el título abajo)."""
     import re
-    m = None
-    for m in re.finditer(r'[«"“]([^»"”]{1,60})[»"”]', text):
-        pass
-    if not m:
+    ms = list(re.finditer(r'[«"“]([^»"”]{1,60})[»"”]', text))
+    if not ms:
         return ""
-    before = re.split(r"[,;.\n]", text[:m.start()])[-2:]
+    want = (quote or _quoted(text)).strip()
+    m = next((x for x in ms if x.group(1).strip() == want), max(ms, key=lambda x: len(x.group(1))))
+    before = re.split(r"[,;.\n]", text[:m.start()])[-1:]       # solo la frase del título (no la anterior)
     after = re.split(r"[.;\n]", text[m.end():])[0]
     return (" ".join(before) + " " + after).lower()
 
@@ -671,12 +673,12 @@ def _color_at(word):
     return next((v for k, v in _COLORS.items() if w.startswith(k)), "")
 
 
-def title_spec(text):
-    """Cómo pediste el título: posición, colores de relleno y borde, estilo. Lee SOLO la frase del título.
-    Devuelve dict(style, position, fill, stroke, thick) (vacíos si no lo dijiste)."""
+def title_spec(text, quote=None):
+    """Cómo pediste el título (o el subtítulo, con quote): posición, colores de relleno, borde y brillo, estilo.
+    Lee SOLO la frase de ese texto. Devuelve dict(style, position, fill, stroke, glow, thick)."""
     import re
-    t = _title_window(text)
-    out = {"style": _title_style(text), "position": "", "fill": "", "stroke": "", "thick": False}
+    t = _title_window(text, quote)
+    out = {"style": _title_style(text), "position": "", "fill": "", "stroke": "", "glow": "", "thick": False}
     if not t:
         return out
     if re.search(r"\b(right|derecha|derecho)\b", t):
@@ -701,8 +703,17 @@ def title_spec(text):
             if pick is not None:
                 out["stroke"], used = _color_at(words[pick]), pick
                 break
-    for j, w in enumerate(words):                 # el primer color que no es el del borde es el relleno
-        if j != used and _color_at(w):
+    glow_at = -1
+    for i, w in enumerate(words):                 # «brillo verde» / «resplandor dorado» / «green glow»
+        if re.fullmatch(r"(brillo|brillos|resplandor|glow|aura|halo|luz)", w):
+            after_ = [j for j in range(i + 1, min(len(words), i + 3)) if _color_at(words[j])]
+            before = [j for j in range(max(0, i - 2), i) if _color_at(words[j])] if w in ("glow", "aura") else []
+            pick = (after_ or before or [None])[0]
+            if pick is not None and pick != used:
+                out["glow"], glow_at = _color_at(words[pick]), pick
+                break
+    for j, w in enumerate(words):                 # el primer color que no es del borde ni del brillo es el relleno
+        if j not in (used, glow_at) and _color_at(w):
             out["fill"] = _color_at(w)
             break
     out["thick"] = bool(re.search(r"\b(thick|heavy|grueso|gruesa|ancho|fuerte)\b", t))
@@ -797,7 +808,8 @@ def _with_web_facts(info, text, refs, model, limit):
     return info
 
 
-def plan(text, style="Automático", engine=AUTO, model=None, have=None, already_english=False, ref_desc=None):
+def plan(text, style="Automático", engine=AUTO, model=None, have=None, already_english=False, ref_desc=None,
+         review=False):
     """Prepara la imagen: qué motor usar y qué decirle (en su «idioma»). Devuelve dict con
     engine, prompt, negative, kind, reason (en español), strength (si hay referencia). Sin Ollama usa reglas.
     ref_desc: lo que la IA que ve encontró en tu imagen de referencia (para editarla según tu pedido)."""
@@ -823,7 +835,9 @@ def plan(text, style="Automático", engine=AUTO, model=None, have=None, already_
                  f"max {limit} words; if the request is long, translate ALL of it faithfully keeping every detail, "
                  "every color and the composition in the same order, do NOT summarize; if it is short, add helpful "
                  "visual details (composition, lighting, colors) and the art style; "
-                 "\"tags\": comma-separated Danbooru-style tags for an anime model, max 40 tags. If the main subject "
+                 "\"tags\": comma-separated Danbooru-style tags for an anime model, max 40 tags, covering EVERY "
+                 "detail the user wrote (looks like handsome or beautiful, emotions, actions, which hand holds what) "
+                 "and nothing the user did not ask for. If the main subject "
                  "is a NAMED character from an anime, manga or video game (Pokémon included), the FIRST tags must be "
                  "its exact Danbooru character tag and series tag (examples: \"mega rayquaza, shiny pokemon, pokemon "
                  "(creature), no humans\"; \"raiden shogun, genshin impact, 1girl\"). For a person start with 1girl "
@@ -872,6 +886,18 @@ def plan(text, style="Automático", engine=AUTO, model=None, have=None, already_
             info = _with_web_facts(info, text, refs, model, limit)
         if keep_text:                 # tu texto manda; de la IA solo se usan las etiquetas, referencias y género
             info["prompt"] = text
+        if review and vision_model():  # revisión PREVIA: Gemma compara tu texto original con el borrador de Qwen
+            draft = {"prompt": str(info.get("prompt") or ""), "must": []}
+            if str(info.get("tags") or "").strip():
+                draft["tags"] = str(info["tags"])
+            fixed, rep = review_draft(text, draft)
+            if not keep_text:
+                info["prompt"] = fixed.get("prompt") or info.get("prompt")
+            if fixed.get("tags"):
+                info["tags"] = fixed["tags"]
+            if fixed.get("must"):
+                info["must"] = fixed["must"]
+            info["review_note"] = review_note(rep)
         if info.get("kind") in ROUTES and style in ("", "Automático", "Sin estilo"):
             kind = info["kind"]
             if str(info.get("text_in_image") or "").strip() and kind != "anime":
@@ -953,6 +979,8 @@ def plan(text, style="Automático", engine=AUTO, model=None, have=None, already_
                        "No text, no letters, no logos, no watermark.")
     reason = str(info.get("reason") or f"Parece {KIND_ES.get(kind, 'una ilustración')}").strip().rstrip(".") + "."
     reason += note
+    if info.get("review_note"):
+        reason += " " + info["review_note"]
     if info.get("web_sources"):
         reason += " Busqué en internet: " + "; ".join(info["web_sources"]) + "."
     if thumb:
@@ -1344,6 +1372,98 @@ def verify_image(path, checks, model=None, keep_alive="3m"):
         return list(dict.fromkeys(bad))
     except Exception:
         return []
+
+
+def review_draft(original, draft, model=None, timeout=180):
+    """Revisión PREVIA (antes de dibujar): Gemma lee tu texto ORIGINAL y el borrador en inglés de Qwen, marca lo que
+    falta, lo que cambió («hoz» -> «axe») y lo inventado, y devuelve el borrador corregido con la MISMA forma.
+    Las listas «must» / «background_must» del borrador las llena Gemma desde TUS palabras (no desde la traducción).
+    Devuelve (borrador corregido, informe {missing, changed, invented} en español). Si algo falla, el borrador
+    queda igual: nunca frena el trabajo."""
+    import re
+    model = model or fast_judge()
+    if not model or not draft or not (original or "").strip():
+        return draft, {}
+    free_ollama_gpu()                         # Qwen fuera de la tarjeta: Gemma entra entera y va rápido
+    sys_p = ("You are a meticulous bilingual Spanish-English editor for an image generator. You get the USER'S "
+             "ORIGINAL REQUEST and a DRAFT in English that another AI wrote from it. Compare them word by word: find "
+             "every detail of the original that is MISSING in the draft (objects, adjectives, emotions, actions, which "
+             "hand, positions, colors, sizes, numbers), every detail translated WRONGLY (wrong object, color, side, "
+             "count) and everything INVENTED in the draft that the user never asked for (places, objects, effects). "
+             "Then rewrite the draft fixing all of it: keep what was right, add what was missing, fix what was wrong, "
+             "remove what was invented, in English. Keep EXACTLY the same JSON keys and structure as the draft "
+             "(same number of characters, same order). Fill every list named \"must\" or \"background_must\" "
+             "with 2-5 very short English checks taken ONLY from the user's ORIGINAL words for that layer (for a "
+             "person, gender first). If the draft has layout keys, fill them from the ORIGINAL request: "
+             "\"title_position\" one of top-left, top, top-right, left, center, right, bottom-left, bottom, "
+             "bottom-right (exactly where the user put the title; if not said, the place that keeps the main "
+             "character's face and the main creature's face visible); \"subtitle_position\" one of below_title, "
+             "above_title, bottom; \"character_layout\" one {\"position\": left/center/right, \"size\": "
+             "large/medium/small} per character, as the user said or the best choice. "
+             "Work in this order and answer ONLY with JSON: {\"details\": [EVERY single detail of the original, "
+             "one per item: {\"es\": the detail in the user's Spanish words (2-6 words), \"ok\": true only if the "
+             "draft has it and it is correct}], \"fixed\": <the corrected draft, with every detail marked false "
+             "now included>, \"missing\": [short Spanish notes], \"changed\": [short Spanish notes like "
+             "\"hoz: axe -> sickle\"], \"invented\": [short Spanish notes]}. The checks in must lists are "
+             "written in ENGLISH.")
+    user = "USER'S ORIGINAL REQUEST:\n" + original.strip() + "\n\nDRAFT (JSON):\n" + json.dumps(draft, ensure_ascii=False)
+    body = {"model": model, "stream": False, "format": "json", "keep_alive": "2m",
+            "options": {"temperature": 0, "seed": 7, "num_ctx": 8192},
+            "messages": [{"role": "system", "content": sys_p}, {"role": "user", "content": user}]}
+    try:
+        req = urllib.request.Request(OLLAMA + "/api/chat", json.dumps(body).encode(),
+                                     {"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            txt = json.load(r).get("message", {}).get("content", "")
+        d = json.loads(txt[txt.find("{"):txt.rfind("}") + 1])
+    except Exception:
+        return draft, {}
+    fixed = d.get("fixed")
+    if not isinstance(fixed, dict):
+        return draft, {}
+    out = dict(draft)
+    for k, v in draft.items():                # misma forma que el borrador; lo que no venga bien, se queda igual
+        nv = fixed.get(k)
+        if isinstance(v, str) and isinstance(nv, str) and nv.strip():
+            out[k] = nv.strip()
+        elif isinstance(v, list) and isinstance(nv, list):
+            if v and all(isinstance(x, dict) for x in v):          # personajes
+                if len(nv) == len(v):
+                    out[k] = [dict(a, **{kk: vv for kk, vv in b.items() if kk in a and isinstance(vv, type(a[kk]))
+                                         and (vv or isinstance(vv, list))})
+                              if isinstance(b, dict) else a for a, b in zip(v, nv)]
+            else:
+                out[k] = [str(x).strip() for x in nv if str(x).strip()][:6]
+    rep = {k: [str(x) for x in d.get(k) or [] if str(x).strip()][:6] if isinstance(d.get(k), list) else []
+           for k in ("missing", "changed", "invented")}
+    # fuera el ruido: notas sin cambio real o sobre el título (el título lo pone la app, no el dibujo)
+    noise = re.compile(r"no change|sin cambio|kept|se mantiene|igual|t[íi]tulo|subt[íi]tulo|\"|«", re.I)
+    for k in ("missing", "changed", "invented"):
+        rep[k] = [x for x in rep[k] if not noise.search(x)]
+    # lo que Gemma marcó como ausente en la lista detalle por detalle también cuenta como «faltaba»
+    for it in d.get("details") or []:
+        if isinstance(it, dict) and it.get("ok") is False and str(it.get("es") or "").strip():
+            note = str(it["es"]).strip()
+            if noise.search(note):
+                continue
+            if not any(note.lower() in m.lower() or m.lower() in note.lower() for m in rep["missing"] + rep["changed"]):
+                rep["missing"].append(note)
+    rep["missing"] = rep["missing"][:8]
+    return out, rep
+
+
+def review_note(rep):
+    """El informe de Gemma en una línea para la pantalla."""
+    if not rep or not any(rep.values()):
+        return "Revisión previa (Gemma): la traducción tiene todo lo que pediste."
+    parts = []
+    if rep.get("missing"):
+        parts.append("añadí " + "; ".join(rep["missing"]))
+    if rep.get("changed"):
+        parts.append("corregí " + "; ".join(rep["changed"]))
+    if rep.get("invented"):
+        parts.append("quité " + "; ".join(rep["invented"]))
+    return "Revisión previa (Gemma): " + " · ".join(parts) + "."
 
 
 def release_vision(model=None):

@@ -53,7 +53,28 @@ def _screen_from_edges(im, screen):
     """Máscara (255 = fondo) del color de la pantalla (verde, azul o magenta) conectado con los bordes."""
     a = np.asarray(im.convert("RGB")).astype(np.int16)
     near = screen_mask(a, {"azul": "blue", "magenta": "magenta"}.get(screen, "green"))
-    return _flood_edges(Image.fromarray(near.astype(np.uint8) * 255))
+    edge = _flood_edges(Image.fromarray(near.astype(np.uint8) * 255))
+    # huecos ENCERRADOS (entre la capa y el cuerpo, entre el brazo y la cintura): si su color es casi idéntico al
+    # de la pantalla también son fondo. La pantalla se elige de un color que el personaje no lleva, así que es
+    # seguro; se exige un parche de cierto tamaño para no borrar un brillo suelto.
+    ref = _screen_ref(a, screen)
+    if ref is None:
+        return edge
+    dist = np.sqrt(((a - ref) ** 2).sum(axis=2))
+    holes = Image.fromarray(((dist < 30).astype(np.uint8) * 255)).filter(ImageFilter.MinFilter(5)) \
+        .filter(ImageFilter.MaxFilter(7))
+    return ImageChops.lighter(edge, holes)
+
+
+def _screen_ref(a, screen):
+    """Color real de la pantalla medido en los bordes (o None si casi no hay pantalla en los bordes)."""
+    r, g, b = a[..., 0], a[..., 1], a[..., 2]
+    fam = {"azul": b - np.maximum(r, g) > 12, "magenta": np.minimum(r, b) - g > 15}.get(
+        screen, g - np.maximum(r, b) > 12)
+    border = np.concatenate([a[:4].reshape(-1, 3), a[-4:].reshape(-1, 3), a[:, :4].reshape(-1, 3),
+                             a[:, -4:].reshape(-1, 3)])
+    bfam = np.concatenate([fam[:4].ravel(), fam[-4:].ravel(), fam[:, :4].ravel(), fam[:, -4:].ravel()])
+    return np.median(border[bfam], axis=0) if bfam.mean() >= .2 else None
 
 
 def _despill(out, mask, screen="verde"):

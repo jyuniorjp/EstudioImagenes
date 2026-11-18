@@ -614,8 +614,11 @@ class ImageStudio(ctk.CTkFrame):
                 txt = ("FONDO: " + tp.get("background", "") + "\n\nPERSONAJES:\n" +
                        ("\n".join("• " + (f"[{gen_es[c['gender']]}] " if c.get("gender") in gen_es else "") +
                                   str(c.get("desc") or "") for c in tp.get("characters", [])) or "sin personajes") +
-                       (f"\n\nTÍTULO: «{tp['title']}»" if tp.get("title") else ""))
-                self._ui(lambda: (self.en.delete("1.0", "end"), self.en.insert("1.0", txt)))
+                       (f"\n\nTÍTULO: «{tp['title']}»" if tp.get("title") else "") +
+                       ("\n\n" + tp["review_note"] if tp.get("review_note") else ""))
+                self._ui(lambda: (self.en.delete("1.0", "end"), self.en.insert("1.0", txt),
+                                  self.lbl_why.configure(text=tp.get("review_note") or "")))
+            say("Tu IA separa el pedido en capas y Gemma revisa que no falte nada (~40 s)…", .02)
             proj, tp = miniatura_auto.build(prompt, say, self.cancel, have=self.avail,
                                             refs=list(getattr(self, "refs", []) or []),
                                             versions=max(1, min(3, int(self.v_n.get()))), on_plan=show_plan)
@@ -1112,8 +1115,10 @@ class ImageStudio(ctk.CTkFrame):
                     ia.free_ollama_gpu()
                     ref_desc = ia.describe_for_edit(opts["refs"]) or None
                 say("Tu IA analiza lo que pediste y elige el modelo…" if translate else "Preparando…", 0.04)
+                if translate and ia.vision_model():
+                    say("Tu IA traduce y Gemma revisa que no falte nada de lo que pediste…", 0.04)
                 pl = ia.plan(prompt, opts["style"], opts["engine"], model=self.ollama if translate else "",
-                             have=self.avail, ref_desc=ref_desc)
+                             have=self.avail, ref_desc=ref_desc, review=bool(translate))
                 english, final = pl["prompt"], pl["prompt"]
                 opts["must"] = pl.get("must") or []
                 opts.update(engine=pl["engine"], negative=pl["negative"], reason=pl["reason"],

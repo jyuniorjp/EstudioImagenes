@@ -26,7 +26,7 @@ def is_thumbnail_request(text):
     return any(w in t for w in _THUMB_W)
 
 
-def thumb_plan(text, model=None, saved_names=()):
+def thumb_plan(text, model=None, saved_names=(), review=True):
     """Divide el pedido en capas. Devuelve dict: background, characters[], title, subtitle, title_style, glow,
     embers. Sin Ollama hace un plan simple (todo al fondo y el texto entre comillas como título)."""
     model = model if model is not None else ia.ollama_model()
@@ -39,14 +39,19 @@ def thumb_plan(text, model=None, saved_names=()):
         base["background"] = ia.to_english(text, "") + ", no people"
         return base
     sys_p = (
-        "You plan a YouTube thumbnail made of separate layers. Read the user's request (often Spanish) and answer "
+        "You plan a YouTube thumbnail made of separate layers. Read the user's request (often Spanish). " +
+        "Translate FAITHFULLY: keep every noun, adjective, emotion, action and detail the user wrote for each "
+        "layer (nothing omitted), never replace an object with a different one, and never add places, objects "
+        "or creatures the user did not mention. Spanish weapon words: hoz = sickle, guadaña = scythe, hacha = "
+        "axe, espada = sword, lanza = spear, arco = bow, martillo = hammer, daga = dagger. "
+        "Answer "
         "ONLY with JSON: {"
         "\"background\": English prompt for the BACKGROUND ONLY (setting, sky, weather, light, colors, big creatures or "
-        "objects that are part of the scenery like a dragon in the sky; if the user says a creature is gigantic or "
+        "objects the user places in the scenery; if the user says a creature is gigantic or "
         "huge, describe it as enormous and filling a big part of the frame; keep every creature's MATERIAL, SHAPE "
-        "and COLORS exactly as the user wrote and say they keep those colors under the scene light, e.g. a crystal "
-        "dragon = one solid dragon sculpted from translucent icy-blue crystal glowing from inside, not a mosaic, not "
-        "stained glass), NO people, NO main characters, keep the area where the title goes simple, max 120 words; "
+        "and COLORS exactly as the user wrote and say they keep those colors under the scene light; a creature made "
+        "of a material is one solid sculpted body, not a mosaic of pieces), NO people, NO main characters, keep the "
+        "area where the title goes simple, max 120 words; "
         "\"background_must\": 2-5 very short English checks a viewer can verify in the background picture "
         "taken ONLY from this user's request (never invent or copy anything else); "
         "\"characters\": list (max 3) of the MAIN foreground figures, each {\"desc\": English description of the "
@@ -107,6 +112,54 @@ def thumb_plan(text, model=None, saved_names=()):
                 r"\b(woman|man|girl|boy|female|male)\b", m.lower())][:4]
         if not c.get("position") or str(c["position"]).lower() not in ("left", "right", "center"):
             c["position"] = {"right": "left", "left": "right"}.get(spec["position"], "")
+        # ¿lo dijiste tú? («a la izquierda», «on the left»): entonces Gemma no lo mueve
+        c["_user_pos"] = bool(re.search(r"\b(izquierda|derecha|centro|left|right|center)\b", text.lower()))
+    if review and ia.vision_model():           # revisión PREVIA: Gemma compara tu texto con las capas de Qwen
+        draft = {"background": out["background"], "background_must": [],
+                 "characters": [{"desc": str(c.get("desc") or ""), "tags": str(c.get("tags") or ""), "must": []}
+                                for c in out["characters"]]}
+        if not out["characters"]:
+            draft.pop("characters")
+        if out["title"]:                       # composición: Gemma decide dónde queda mejor cada cosa
+            draft["title_position"] = ""
+            if out["subtitle"]:
+                draft["subtitle_position"] = ""
+        if out["characters"]:
+            draft["character_layout"] = [{"position": str(c.get("position") or ""), "size": str(c.get("size") or "")}
+                                         for c in out["characters"]]
+        fixed, rep = ia.review_draft(text, draft)
+        tpos = str(fixed.get("title_position") or "").lower().strip()
+        if tpos in _PLACES:
+            # lo que TÚ escribiste manda: Gemma solo precisa (p. ej. «derecha» -> «arriba a la derecha»)
+            side = spec["position"]
+            if not side or side in tpos or (side == "top" and tpos.startswith("top")) or \
+                    (side == "bottom" and tpos.startswith("bottom")):
+                out["title_place"] = tpos
+        spos = str(fixed.get("subtitle_position") or "").lower().strip()
+        if spos in ("below_title", "above_title", "bottom"):
+            out["subtitle_place"] = spos
+        for c, lay in zip(out["characters"], fixed.get("character_layout") or []):
+            if isinstance(lay, dict):
+                if str(lay.get("position")).lower() in ("left", "center", "right") and not c.get("_user_pos"):
+                    c["position"] = str(lay["position"]).lower()
+                if str(lay.get("size")).lower() in ("large", "medium", "small"):
+                    c["size"] = str(lay["size"]).lower()
+        out["background"] = fixed.get("background") or out["background"]
+        if fixed.get("background_must"):
+            out["background_must"] = ia.relevant_checks(fixed["background_must"], out["background"], text)
+        for c, fc in zip(out["characters"], fixed.get("characters") or []):
+            for k in ("desc", "tags"):
+                if fc.get(k):
+                    c[k] = fc[k]
+            if fc.get("must"):
+                c["must"] = ia.relevant_checks(fc["must"], c.get("desc", ""), c.get("tags", ""), text)
+        for c in out["characters"]:               # el género que TÚ escribiste se revisa siempre, primero
+            g = str(c.get("gender") or "")
+            if g in ("male", "female"):
+                want = "a woman" if g == "female" else "a man"
+                c["must"] = [want] + [m for m in c.get("must", []) if m != want][:4]
+        out["review"] = rep
+        out["review_note"] = ia.review_note(rep)
     g = str(d.get("glow") or "")
     out["glow"] = g if re.fullmatch(r"#[0-9a-fA-F]{6}", g) else ""
     out["embers"] = bool(d.get("embers"))
@@ -281,6 +334,14 @@ def soften_cut_edges(png, sides, frac=.09):
     im.save(png)
 
 
+_PLACES = ("top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right")
+
+
+_SCENERY = re.compile(r"\b(battlefield|sky|skies|landscape|city|cityscape|forest|clouds?|storm|stormy|mountains?|"
+                      r"ruins|outdoors|indoors|field|ocean|sea|street|castle|room|valley|desert|night|sunset|"
+                      r"scenery|background|horizon|space|cosmos|cosmic|galaxy)\b", re.I)
+
+
 _CHAR_NEG = ("cropped, out of frame, cut off, scenery, detailed background, sky, clouds, landscape, abstract background, gradient background, "
              "wind effects, floating particles, frame, border")
 
@@ -345,6 +406,9 @@ def build(text, say=None, cancel=None, have=None, refs=(), screen=None, versions
         frame, f_tags, f_phrase = framing_of(str(c.get("desc", "")) + " " + text)
         c["_frame"] = frame
         if ia.ENGINES[pl["engine"]].get("words") == "tags":
+            # el personaje va sobre una pantalla lisa: fuera los paisajes que la IA añade por su cuenta
+            # («dark battlefield, stormy sky» estorban al recorte y no los pediste para el personaje)
+            pl["prompt"] = ", ".join(t for t in pl["prompt"].split(", ") if not _SCENERY.search(t))
             prompt = pl["prompt"].replace(", masterpiece", f", {f_tags}, official art, " +
                                           ia.screen_prompt(scr, True) + ", masterpiece")
         else:
@@ -400,6 +464,11 @@ def build(text, say=None, cancel=None, have=None, refs=(), screen=None, versions
     # 2) personajes (cada uno sobre pantalla verde o blanco, recortado y armonizado)
     layers = [{"kind": "image", "path": bg, "cover": True, "x": .5, "y": .5}]
     order = sorted(range(n), key=lambda i: 0 if tp["characters"][i].get("size") == "large" else 1, reverse=True)
+    place0 = tp.get("title_place") or {"right": "top-right", "left": "top-left"}.get(spec.get("position"),
+                                                                                    spec.get("position") or "")
+    tside = "right" if place0.endswith("right") else "left" if place0.endswith("left") else ""
+    if tside and spec.get("position") not in ("left", "right"):
+        spec = dict(spec, position=tside)           # el título va a un costado: los personajes al otro
     side_title = spec.get("position") in ("left", "right")
     xs = POS.get(n, POS[3])
     if side_title:                                # el título ocupa un costado: los personajes van en el otro
@@ -408,7 +477,7 @@ def build(text, say=None, cancel=None, have=None, refs=(), screen=None, versions
             xs = [.27, .27, .27] if spec["position"] == "right" else [.73, .73, .73]
     sides = {"left": 0, "center": 1, "right": 2}
     used = set()
-    top = .2 if tp["title"] and spec.get("position") in ("", "top") else .05   # la cabeza bajo el título
+    top = .2 if tp["title"] and (place0 or "top") in ("", "top") else .05   # la cabeza bajo el título
     for k, i in enumerate(order):
         if cancel is not None and cancel.is_set():
             raise RuntimeError("CANCELLED")
@@ -484,17 +553,20 @@ def build(text, say=None, cancel=None, have=None, refs=(), screen=None, versions
     # 3) textos (dónde y cómo los pediste)
     shade_side = "top"
     if tp["title"]:
-        pos = spec.get("position") or "top"
+        place = tp.get("title_place") or {"right": "top-right", "left": "top-left"}.get(spec.get("position"),
+                                                                                      spec.get("position") or "top")
         lay = {"kind": "text", "style": tp["title_style"]}
-        if pos in ("left", "right"):
-            lay.update(text=_split_title(tp["title"]), align=pos, x=.965 if pos == "right" else .035, y=.1,
-                       size=.19, max_w=.5)
-            shade_side = pos
-        elif pos == "bottom":
+        side = "right" if place.endswith("right") else "left" if place.endswith("left") else ""
+        if side:                                     # a un costado: dos líneas grandes
+            y0 = {"top": .05, "bottom": .52}.get(place.split("-")[0], .22)
+            lay.update(text=_split_title(tp["title"]), align=side, x=.965 if side == "right" else .035, y=y0,
+                       size=.17 if place.startswith(("top", "bottom")) else .19, max_w=.5)
+            shade_side = side
+        elif place == "bottom":
             lay.update(text=tp["title"], align="center", x=.5, y=.72, size=.15 if len(tp["title"]) < 22 else .12)
             shade_side = "bottom"
         else:
-            lay.update(text=tp["title"], align="center", x=.5, y=.035 if pos == "top" else .4,
+            lay.update(text=tp["title"], align="center", x=.5, y=.035 if place == "top" else .4,
                        size=.15 if len(tp["title"]) < 22 else .12)
         if spec.get("fill"):
             lay["fill"] = spec["fill"]
@@ -502,11 +574,36 @@ def build(text, say=None, cancel=None, have=None, refs=(), screen=None, versions
             lay["stroke"] = spec["stroke"]
             lay["stroke_w"] = .11 if spec.get("thick") else .075
             lay["glow"] = "#000000"             # sombra oscura: el borde de color resalta más
+        if spec.get("glow"):                     # «brillo verde»: lo pediste tú
+            lay["glow"] = spec["glow"]
         layers.append(lay)
     if tp["subtitle"]:
-        sub_y = .22 if shade_side == "top" else (.62 if shade_side in ("left", "right") else .62)
-        layers.append({"kind": "text", "text": tp["subtitle"], "style": "Elegante", "x": layers[-1].get("x", .5),
-                       "y": sub_y, "size": .065, "align": layers[-1].get("align", "center")})
+        tl = next((l for l in layers if l.get("kind") == "text"), None)
+        if tl:                                       # junto al título: debajo (o encima si lo pediste)
+            # se MIDE el título ya dibujado (antes se calculaba a ojo y «CAP 1-5» quedaba encima de «CRONOS»)
+            try:
+                timg, _tx, ty = M.render_text(tl, 1280, 720)
+                bb = timg.getchannel("A").point(lambda v: 255 if v > 90 else 0).getbbox()
+                below = (ty + (bb[3] if bb else timg.height)) / 720 + .01
+            except Exception:
+                below = tl["y"] + tl["size"] * ((tl["text"].count("\n") + 1) * 1.25 + .3)
+            sub_y = max(.02, tl["y"] - .1) if tp.get("subtitle_place") == "above_title" else \
+                (.86 if tp.get("subtitle_place") == "bottom" else min(.88, below))
+            if tp.get("subtitle_place") == "above_title":
+                tl["y"] = min(.8, tl["y"] + .09)
+        else:
+            sub_y = .22
+        sl = {"kind": "text", "text": tp["subtitle"], "style": "Elegante", "x": tl.get("x", .5) if tl else .5,
+              "y": sub_y, "size": .065, "align": tl.get("align", "center") if tl else "center"}
+        ss = ia.title_spec(text, tp["subtitle"])          # «"CAP 1-5" en letras doradas con borde negro»
+        if ss.get("fill") or ss.get("stroke"):
+            sl.update(style="Impacto", size=.08)
+            for k in ("fill", "stroke", "glow"):
+                if ss.get(k):
+                    sl[k] = ss[k]
+            if ss.get("stroke"):
+                sl["stroke_w"] = .1 if ss.get("thick") else .07
+        layers.append(sl)
     explicit_pos = bool(re.search(r"\b(left|right|izquierda|derecha|center|centro)\b", text.lower()))
     proj = {"size": [1280, 720], "layers": layers, "alt_backgrounds": alt_bgs,
             "lock": {"layout": bool(spec.get("position")) or explicit_pos,
