@@ -28,7 +28,7 @@ dibuja, sin internet y sin pagar por imagen.**
 ![Editor de miniaturas](docs/editor_miniaturas.png)
 
 ## Cómo probarlo
-1. Descarga `Instalar_EstudioImagenes_1.0.0.exe` desde
+1. Descarga `Instalar_EstudioImagenes_1.1.0.exe` desde
    [Releases](https://github.com/jyuniorjp/EstudioImagenes/releases/latest) y ábrelo (no pide administrador).
    Si Windows dice «Windows protegió tu PC», pulsa **Más información → Ejecutar de todas formas**.
 2. La primera vez la app revisa tu tarjeta, te explica qué descarga (motor ComfyUI y modelos), cuánto pesa cada

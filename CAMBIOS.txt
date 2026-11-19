@@ -12,6 +12,10 @@ ESTUDIO DE IMÁGENES - HISTORIAL DE CAMBIOS
     vez en cuando); el formato de guardado y «Cuántas» se leen antes de empezar.
   - Pruebas automáticas (pruebas\test_estudio.py, 17 pruebas): COMPILAR_IMAGENES.bat no compila si alguna falla.
   - Revisado con pyflakes: sin avisos.
+  - Detalles: miniaturas_tmp ya no crece sin límite (borra los intentos descartados con más de 2 días, nunca lo que
+    use un proyecto guardado); el registro de errores rota al pasar de 1 MB; las imágenes copiadas se cierran
+    (en Windows un archivo abierto no se puede borrar ni mover); «¿hay Gemma?» se recuerda 1 minuto en vez de
+    preguntar a Ollama modelo por modelo muchas veces por imagen. 19 pruebas.
 
 1.0.x (17-18-11-2026) - lo que se fue construyendo
   - Modelo automático (Animagine para anime y personajes conocidos, Z-Image para fotos, arte y texto), con Qwen

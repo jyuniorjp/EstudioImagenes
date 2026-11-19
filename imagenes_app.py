@@ -119,7 +119,13 @@ def update_shortcut_icons(key):
 def log_error(where, exc_text):
     try:
         os.makedirs(os.path.dirname(CFG), exist_ok=True)
-        with open(os.path.join(os.path.dirname(CFG), "error.log"), "a", encoding="utf-8") as f:
+        path = os.path.join(os.path.dirname(CFG), "error.log")
+        try:                                   # con límite: pasado 1 MB se guarda una copia y empieza uno nuevo
+            if os.path.getsize(path) > 1_000_000:
+                os.replace(path, path + ".anterior")
+        except OSError:
+            pass
+        with open(path, "a", encoding="utf-8") as f:
             f.write(f"\n[{datetime.datetime.now():%Y-%m-%d %H:%M:%S}] {APP} - {where}\n{exc_text}\n")
     except OSError:
         pass
@@ -401,6 +407,18 @@ class ImageStudio(ctk.CTkFrame):
                 self.after(900, self.open_setup)
         threading.Thread(target=self._find_ollama, daemon=True).start()
         self.after(300, self._bind_keys)
+        self.after(8000, self._cleanup_later)
+
+    def _cleanup_later(self):
+        """Limpieza silenciosa por detrás: intentos descartados de miniaturas con más de 2 días."""
+        import miniatura_auto
+
+        def work():
+            try:
+                miniatura_auto.cleanup_work([self.out_dir])
+            except Exception:
+                log_error("limpieza", traceback.format_exc())
+        threading.Thread(target=work, daemon=True).start()
 
     # ---------------------------------------------------------------- atajos de teclado
     KEYS = (("Ctrl+Enter", "Crear imagen"), ("Esc", "Cancelar lo que se está creando"),

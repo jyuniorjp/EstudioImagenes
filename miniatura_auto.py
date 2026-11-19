@@ -21,6 +21,53 @@ WORK = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "AudioNo
 _THUMB_W = ("miniatura", "thumbnail", "portada de youtube", "miniatura de youtube")
 
 
+def _copy_image(src, dst):
+    """Copia una imagen cerrando el archivo (en Windows, uno abierto no se puede borrar ni mover)."""
+    with Image.open(src) as im:
+        im.load()
+        im.save(dst)
+
+
+def cleanup_work(out_dirs=(), days=2):
+    """Borra de miniaturas_tmp los INTENTOS descartados (redibujos, recortes intermedios, escenas sin texto) con más
+    de `days` días. Nunca borra las capas finales ni nada que use un proyecto .miniatura.json de tus carpetas.
+    Devuelve (archivos, bytes) liberados. Antes la carpeta crecía sin límite (~90 MB por día de uso)."""
+    import glob
+    import time
+    refs = set()
+    for d in out_dirs:
+        for j in glob.glob(os.path.join(d, "*.miniatura.json")):
+            try:
+                with open(j, encoding="utf-8") as f:
+                    p = json.load(f)
+                for l in p.get("layers", []):
+                    if l.get("path"):
+                        refs.add(os.path.basename(l["path"]).lower())
+                for a in p.get("alt_backgrounds") or []:
+                    refs.add(os.path.basename(a).lower())
+            except Exception:
+                continue
+    keep = re.compile(r"(_capa\.png|^auto_fondo_\d{8}_\d{6}(_v\d)?\.png|^auto_(unica|escena)_\d{8}_\d{6}(_v\d)?\.png)$",
+                      re.I)
+    n = size = 0
+    limit = time.time() - days * 86400
+    try:
+        names = os.listdir(WORK)
+    except OSError:
+        return 0, 0
+    for f in names:
+        full = os.path.join(WORK, f)
+        try:
+            if f.lower() in refs or keep.search(f) or not os.path.isfile(full) or os.path.getmtime(full) > limit:
+                continue
+            sz = os.path.getsize(full)
+            os.remove(full)
+            n, size = n + 1, size + sz
+        except OSError:
+            continue
+    return n, size
+
+
 def is_thumbnail_request(text):
     t = (text or "").lower()
     return any(w in t for w in _THUMB_W)
@@ -787,7 +834,7 @@ def build(text, say=None, cancel=None, have=None, refs=(), screen=None, versions
             break
         say("Al fondo le falta: " + "; ".join(miss) + ". Lo dibujo otra vez reforzando eso…", None)
     if best_bg != bg:
-        Image.open(best_bg).save(bg)
+        _copy_image(best_bg, bg)
     tp["background_missing"] = best_miss or []
     alt_bgs = []
     for j in range(max(0, int(versions) - 1)):     # versiones B y C: el mismo pedido, otro dibujo de fondo
@@ -868,8 +915,8 @@ def build(text, say=None, cancel=None, have=None, refs=(), screen=None, versions
                         neg = "(scenery:1.3), (landscape:1.3), (rock:1.2), (crystal:1.1), (small figure:1.3), " + neg
             pts, raw_b, cut_b, tch = max(tries, key=lambda t: t[0])       # el mejor intento
             ia.release_vision()
-            Image.open(raw_b).save(raw)
-            Image.open(cut_b).save(cut)
+            _copy_image(raw_b, raw)
+            _copy_image(cut_b, cut)
             if cut_quality(cut) > .8:
                 harden_cut(cut)
             soft = [sd for sd, v in tch.items() if v > .01 and not (sd == "bottom" and c.get("_frame") != "full")]

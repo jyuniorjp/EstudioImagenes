@@ -15,6 +15,11 @@ import miniatura_auto as A        # noqa: E402
 import miniaturas as M            # noqa: E402
 
 
+def _write(path, data):
+    with open(path, "wb") as f:
+        f.write(data)
+
+
 class Titulo(unittest.TestCase):
     TITAN = ('Fondo: titán con barba gris y una guadaña de energía verde en la mano derecha. '
              'Título arriba a la derecha: "ESCAPÉ DE CRONOS" con letras blancas, borde negro grueso y brillo verde. '
@@ -139,6 +144,56 @@ class Rueda(unittest.TestCase):
         self.assertTrue(ui_scroll._at_end((0.5, 1.0), -120))       # abajo del todo y bajando
         self.assertFalse(ui_scroll._at_end((0.5, 1.0), 120))       # pero puede subir
         self.assertFalse(ui_scroll._at_end((0.0, 0.4), -120))
+
+
+class Limpieza(unittest.TestCase):
+    def test_borra_solo_intentos_viejos_y_no_lo_que_usan_tus_proyectos(self):
+        import json
+        import time
+        d = tempfile.mkdtemp()
+        work, mine = os.path.join(d, "tmp"), os.path.join(d, "mis_imagenes")
+        os.makedirs(work)
+        os.makedirs(mine)
+        old = time.time() - 5 * 86400
+        names = {"auto_pers_20261101_120000_0_capa.png": "queda",          # capa final
+                 "auto_fondo_20261101_120000.png": "queda",               # fondo final
+                 "auto_fondo_20261101_120000_v2.png": "queda",            # fondo de la versión B
+                 "auto_pers_20261101_120000_0_1.png": "se borra",         # intento descartado
+                 "auto_pers_20261101_120000_0_1_recorte.png": "se borra",
+                 "auto_fondo_20261101_120000_1.png": "se borra",          # redibujo descartado
+                 "auto_pers_20261101_120000_0_0.png": "queda",            # lo usa un proyecto guardado
+                 "pulir.png": "se borra"}
+        for n in names:
+            p = os.path.join(work, n)
+            _write(p, b"x")
+            os.utime(p, (old, old))
+        nuevo = os.path.join(work, "auto_pers_20261119_120000_0_1.png")   # intento de hoy: aún no se borra
+        _write(nuevo, b"x")
+        _write(os.path.join(mine, "miniatura_x.miniatura.json"),
+               json.dumps({"layers": [{"path": os.path.join(work, "auto_pers_20261101_120000_0_0.png")}]}).encode())
+        A.WORK = work
+        n, _size = A.cleanup_work([mine])
+        left = set(os.listdir(work))
+        for name, fate in names.items():
+            self.assertEqual(name in left, fate == "queda", name)
+        self.assertIn(os.path.basename(nuevo), left)
+        self.assertEqual(n, 4)
+
+
+class Registro(unittest.TestCase):
+    def test_registro_de_errores_con_limite(self):
+        import imagenes_app as app
+        d = tempfile.mkdtemp()
+        old_cfg = app.CFG
+        app.CFG = os.path.join(d, "estudio.json")
+        try:
+            log = os.path.join(d, "error.log")
+            _write(log, b"x" * 1_100_000)
+            app.log_error("prueba", "detalle")
+            self.assertTrue(os.path.isfile(log + ".anterior"))
+            self.assertLess(os.path.getsize(log), 1000)
+        finally:
+            app.CFG = old_cfg
 
 
 if __name__ == "__main__":

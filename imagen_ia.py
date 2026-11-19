@@ -1327,7 +1327,20 @@ def cutout(src, dst, kind="anime", say=None, white=False, screen=""):
 
 
 # ------------------------------------------------------------------ mirar una imagen (Gemma 4 ve imágenes)
+_VISION_CACHE = [0.0, None]
+
+
 def vision_model():
+    """Modelo de Ollama que ve imágenes (o ''), recordado 1 minuto: antes se preguntaba a Ollama modelo por modelo
+    muchas veces en cada imagen."""
+    if _VISION_CACHE[1] is not None and time.time() - _VISION_CACHE[0] < 60:
+        return _VISION_CACHE[1]
+    v = _vision_model_now()
+    _VISION_CACHE[:] = [time.time(), v]
+    return v
+
+
+def _vision_model_now():
     try:
         with urllib.request.urlopen(OLLAMA + "/api/tags", timeout=2) as r:
             ms = json.load(r).get("models", [])
