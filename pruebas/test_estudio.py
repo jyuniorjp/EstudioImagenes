@@ -235,5 +235,25 @@ class TestTemaBotones(unittest.TestCase):
             root.destroy()
 
 
+class TestKlein(unittest.TestCase):
+    def test_flujo_klein(self):
+        import imagen_ia as ia
+        e = "Detallada (FLUX.2 Klein)"
+        g = ia._workflow(e, "a cat", 1024, 768, 3)
+        self.assertEqual(g["k1"]["class_type"], "SamplerCustomAdvanced")
+        self.assertEqual(g["lat"]["class_type"], "EmptyFlux2LatentImage")
+        self.assertEqual(g["vae"]["inputs"]["vae_name"], "flux2-vae.safetensors")
+        g = ia._workflow(e, "a cat", 1024, 768, 3, detail=True, init_name="r.png", denoise=0.5)
+        self.assertEqual(g["k1"]["inputs"]["sigmas"], ["k1x", 1])          # parte de la referencia: solo el final
+        self.assertEqual(g["k2s"]["inputs"]["width"], 1536)                 # 2.ª pasada al tamaño agrandado
+        for name, node in g.items():                                       # todo enlace apunta a un nodo que existe
+            for v in node["inputs"].values():
+                if isinstance(v, list) and len(v) == 2 and isinstance(v[0], str):
+                    self.assertIn(v[0], g, name)
+        z = ia._workflow("Alta calidad (Z-Image Turbo)", "a cat", 1024, 768, 3, detail=True)
+        self.assertEqual(z["k2"]["class_type"], "KSampler")              # los demás modelos, igual que antes
+
+
+
 if __name__ == "__main__":
     unittest.main()

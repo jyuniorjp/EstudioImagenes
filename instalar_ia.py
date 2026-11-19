@@ -46,6 +46,10 @@ F = {
                 "flux1-schnell-Q4_K_S.gguf", 6783943712),
     "dev": (HF + "/city96/FLUX.1-dev-gguf/resolve/main/flux1-dev-Q4_K_S.gguf", "modelos/unet",
             "flux1-dev-Q4_K_S.gguf", 6805988640),
+    "klein": (HF + "/unsloth/FLUX.2-klein-4B-GGUF/resolve/main/flux-2-klein-4b-Q8_0.gguf", "modelos/unet",
+              "flux-2-klein-4b-Q8_0.gguf", 4300644928),
+    "klein_vae": (HF + "/Comfy-Org/flux2-klein-4B/resolve/main/split_files/vae/flux2-vae.safetensors", "modelos/vae",
+                  "flux2-vae.safetensors", 336211292),
     "ollama_setup": ("https://ollama.com/download/OllamaSetup.exe", "descargas", "OllamaSetup.exe", 0),
     "up_anime": ("https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth",
                  "modelos/upscale_models", "RealESRGAN_x4plus_anime_6B.pth", 17938799),
@@ -84,8 +88,11 @@ PACKS = {
                        "audionovelas de anime."),
     "jugg": dict(title="Rápida: Juggernaut XL Lightning", default=False, files=["jugg"],
                  what="Fotos realistas en ~15 s. Útil si quieres muchas imágenes rápido."),
-    "flux": dict(title="FLUX schnell + dev (extra)", default=False, files=["schnell", "dev", "t5", "clip_l", "ae"],
-                 what="Otros dos estilos de ilustración; dev da mucho detalle pero tarda ~2 min por imagen."),
+    # FLUX.1 schnell/dev ya no se ofrecen: FLUX.2 Klein les ganó en calidad y tarda la mitad (quien ya los
+    # tenga los sigue viendo en el menú, porque la app ofrece lo que encuentra en el disco)
+    "klein": dict(title="Detallada: FLUX.2 Klein (extra)", default=False, files=["klein", "qwen", "klein_vae"],
+                  what="Escenas con muchos detalles y descripciones largas, ~40 s por imagen. Comparte con "
+                       "Z-Image su lector de texto, así que si ya tienes Z-Image solo baja 4,6 GB."),
     "ollama": dict(title="Asistente de descripciones (Ollama + Qwen3 4B)", default=True, files=[],
                    what="Entiende lo que escribes en español, elige el mejor modelo y le escribe la descripción. "
                         "Sin él, escribe en inglés y elige el modelo a mano."),

@@ -1481,7 +1481,7 @@ TIPS = [
      "«Una casa» da cualquier cosa; «una casa de adobe con techo rojo al amanecer» da lo que imaginas."),
     ("Texto dentro de la imagen",
      "Ponlo entre comillas y corto (1 a 4 palabras), mejor en MAYÚSCULAS: que diga \"KUON STUDIO\". "
-     "Di dónde va: «arriba, en letras grandes». Lo hace Z-Image (o FLUX dev). Frases largas suelen salir mal."),
+     "Di dónde va: «arriba, en letras grandes». Lo hace Z-Image (o FLUX.2 Klein). Frases largas suelen salir mal."),
     ("Anime",
      "Escribe «estilo anime» o elige el estilo Anime: se usa Animagine XL. Describe pelo, ojos, ropa, pose y fondo. "
      "Tu IA lo convierte en las etiquetas que ese modelo entiende (1girl, silver hair, school uniform…)."),
@@ -1510,8 +1510,7 @@ MODELS_HELP = [
     ("Alta calidad · Z-Image Turbo", "Fotos realistas, arte, portadas y texto dentro de la imagen. ~55 s."),
     ("Anime · Animagine XL 4", "Personajes y escenas de anime/manga. Entiende etiquetas. ~30 s."),
     ("Rápida · Juggernaut XL", "Fotos realistas en ~15 s; entiende peor descripciones largas."),
-    ("Ilustración · FLUX schnell", "Ilustraciones variadas ~45 s."),
-    ("Máxima calidad · FLUX dev", "Mucho detalle y texto; el más lento (~2 min)."),
+    ("Detallada · FLUX.2 Klein", "Escenas con muchos detalles y descripciones largas; fiel a lo que pides. ~40 s."),
 ]
 
 

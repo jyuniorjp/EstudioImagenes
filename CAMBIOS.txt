@@ -2,6 +2,11 @@ ESTUDIO DE IMÁGENES - HISTORIAL DE CAMBIOS
 ==========================================
 
 1.1.0 (19-11-2026) - proyecto propio, optimización, revisión de errores y diseño propio
+  - Nuevo modelo: FLUX.2 Klein («Detallada»), ~40 s, escenas con mucho detalle; también en la 2.ª pasada de
+    detalle y con imágenes de referencia. Reemplaza en el instalador a FLUX.1 schnell/dev (más lentos y peores);
+    quien ya los tenga los sigue viendo. La app ahora también busca los VAE en el disco antes de ofrecer un modelo.
+  - Tema de botones propio: iconos blancos legibles en tamaño pequeño, pestañas grandes con icono, botón principal
+    destacado, títulos de sección con barra de color. Dentro de Audio Novela solo afecta al Estudio.
   - El Estudio se diseñó a sí mismo: 12 iconos (crear, ejemplos, editor, atajos, referencias, internet, carpeta,
     guardar, otra parecida, inspiración, galería, más) y 2 ilustraciones (portada de Inspiración y «Mis imágenes»
     vacía) dibujados con su propio motor (herramientas\generar_iconos.py y generar_arte.py), recortados y con

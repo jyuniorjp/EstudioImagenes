@@ -9,7 +9,7 @@ dibuja, sin internet y sin pagar por imagen.**
 
 ## Qué hace
 - **Elige el modelo solo:** tu IA local (Qwen, con Ollama) lee lo que pides y escoge: anime y personajes
-  conocidos (Pokémon, Genshin…) → Animagine XL 4; fotos, arte y texto → Z-Image Turbo; FLUX opcional.
+  conocidos (Pokémon, Genshin…) → Animagine XL 4; fotos, arte y texto → Z-Image Turbo; FLUX.2 Klein opcional (escenas con mucho detalle).
   También puedes elegirlo tú.
 - **Revisa su trabajo:** Gemma 4 (una IA que ve) comprueba que la imagen tenga lo pedido —el género de cada
   persona, los objetos, los colores— y la dibuja otra vez si falta algo.

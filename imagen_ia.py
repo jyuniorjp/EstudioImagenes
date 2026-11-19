@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Imágenes con IA en tu PC (ComfyUI + SDXL/FLUX), sin internet.
+"""Imágenes con IA en tu PC (ComfyUI + SDXL / Z-Image / FLUX.2 Klein), sin internet.
 
 Lo usan la app «Estudio de Imágenes» y Audio Novela Studio (fondos del video). ComfyUI corre escondido como servidor
 local (http://127.0.0.1:8188); si ya estaba abierto se usa ese. Todo error se convierte en RuntimeError con un
@@ -40,6 +40,9 @@ ENGINES = {
     "Rápida (fotos realistas)": dict(kind="sdxl", file="Juggernaut_XL_Lightning_4Steps.safetensors", steps=5, cfg=1.8,
                                      sampler="dpmpp_sde", scheduler="karras", seg=15, words="natural",
                                      detail_denoise=0.35),
+    "Detallada (FLUX.2 Klein)": dict(kind="klein", file="flux-2-klein-4b-Q8_0.gguf", te="Qwen3-4B-Q6_K.gguf",
+                                     vae="flux2-vae.safetensors", steps=4, seg=40, words="natural",
+                                     detail_denoise=0.30),
     "Ilustración (FLUX schnell)": dict(kind="flux", file="flux1-schnell-Q4_K_S.gguf", steps=4, seg=45, words="natural",
                                        detail_denoise=0.30),
     "Máxima calidad (FLUX dev)": dict(kind="flux", file="flux1-dev-Q4_K_S.gguf", steps=20, seg=115, words="natural",
@@ -48,10 +51,14 @@ ENGINES = {
 DEFAULT_ENGINE = AUTO
 # qué motor conviene para cada tipo de imagen (el primero que esté instalado)
 ROUTES = {
-    "anime": ["Anime (Animagine XL 4)", "Alta calidad (Z-Image Turbo)", "Ilustración (FLUX schnell)"],
-    "photo": ["Alta calidad (Z-Image Turbo)", "Rápida (fotos realistas)", "Máxima calidad (FLUX dev)"],
-    "text": ["Alta calidad (Z-Image Turbo)", "Máxima calidad (FLUX dev)", "Ilustración (FLUX schnell)"],
-    "art": ["Alta calidad (Z-Image Turbo)", "Ilustración (FLUX schnell)", "Máxima calidad (FLUX dev)"],
+    "anime": ["Anime (Animagine XL 4)", "Alta calidad (Z-Image Turbo)", "Detallada (FLUX.2 Klein)",
+              "Ilustración (FLUX schnell)"],
+    "photo": ["Alta calidad (Z-Image Turbo)", "Rápida (fotos realistas)", "Detallada (FLUX.2 Klein)",
+              "Máxima calidad (FLUX dev)"],
+    "text": ["Alta calidad (Z-Image Turbo)", "Detallada (FLUX.2 Klein)", "Máxima calidad (FLUX dev)",
+             "Ilustración (FLUX schnell)"],
+    "art": ["Alta calidad (Z-Image Turbo)", "Detallada (FLUX.2 Klein)", "Ilustración (FLUX schnell)",
+            "Máxima calidad (FLUX dev)"],
 }
 KIND_ES = {"anime": "anime", "photo": "foto realista", "text": "imagen con texto", "art": "ilustración o arte"}
 
@@ -136,12 +143,13 @@ def available_engines(comfy=None):
         return []
     have = set()
     for base in _models_dirs(comfy):
-        for sub in ("checkpoints", "unet", "diffusion_models", "text_encoders", "clip"):
+        for sub in ("checkpoints", "unet", "diffusion_models", "text_encoders", "clip", "vae"):
             try:
                 have.update(os.listdir(os.path.join(base, sub)))
             except OSError:
                 pass
-    return [k for k, v in ENGINES.items() if v["file"] in have and v.get("te", v["file"]) in have]
+    return [k for k, v in ENGINES.items()
+            if v["file"] in have and v.get("te", v["file"]) in have and v.get("vae", v["file"]) in have]
 
 
 def installed():
@@ -266,6 +274,17 @@ def _workflow(engine, prompt, w, h, seed, negative=None, detail=False, init_name
                 "neg": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["pos", 0]}},
             }
             model, positive, negative_ = ["ms", 0], ["pos", 0], ["neg", 0]
+        elif e["kind"] == "klein":       # FLUX.2 Klein: mismo codificador de texto que Z-Image, su propio VAE
+            g = {
+                "u": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": e["file"]}},
+                "c": {"class_type": "CLIPLoaderGGUF", "inputs": {"clip_name": e["te"], "type": "flux2"}},
+                "pos": {"class_type": "CLIPTextEncode", "inputs": {"text": prompt, "clip": ["c", 0]}},
+                "neg": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["pos", 0]}},
+                "guide": {"class_type": "CFGGuider", "inputs": {"model": ["u", 0], "positive": ["pos", 0],
+                                                                "negative": ["neg", 0], "cfg": 1.0}},
+                "smp": {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "euler"}},
+            }
+            model, positive, negative_ = ["u", 0], ["pos", 0], ["neg", 0]
         else:
             g = {
                 "u": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": e["file"]}},
@@ -276,8 +295,9 @@ def _workflow(engine, prompt, w, h, seed, negative=None, detail=False, init_name
                 "pos": {"class_type": "FluxGuidance", "inputs": {"guidance": 3.5, "conditioning": ["pos0", 0]}},
             }
             model, positive, negative_ = ["u", 0], ["pos", 0], ["pos", 0]
-        g["vae"] = {"class_type": "VAELoader", "inputs": {"vae_name": "ae.safetensors"}}
-        g["lat"] = {"class_type": "EmptySD3LatentImage", "inputs": {"width": w, "height": h, "batch_size": 1}}
+        g["vae"] = {"class_type": "VAELoader", "inputs": {"vae_name": e.get("vae", "ae.safetensors")}}
+        g["lat"] = {"class_type": "EmptyFlux2LatentImage" if e["kind"] == "klein" else "EmptySD3LatentImage",
+                    "inputs": {"width": w, "height": h, "batch_size": 1}}
         vae = ["vae", 0]
     samp = dict(seed=seed, steps=e["steps"], cfg=e.get("cfg", 1.0), sampler_name=e.get("sampler", "euler"),
                 scheduler=e.get("scheduler", "simple"), model=model, positive=positive, negative=negative_)
@@ -288,8 +308,27 @@ def _workflow(engine, prompt, w, h, seed, negative=None, detail=False, init_name
                                                             "crop": "center", "image": ["ref", 0]}}
         g["refl"] = {"class_type": "VAEEncode", "inputs": {"pixels": ["refs", 0], "vae": vae}}
         latent = ["refl", 0]
-    g["k1"] = {"class_type": "KSampler", "inputs": dict(samp, denoise=float(denoise) if init_name else 1.0,
-                                                        latent_image=latent)}
+
+    def sampler(name, seed_, steps, den, lat, sw, sh):
+        """KSampler normal; Klein usa su planificador propio (depende del tamaño) y, si no parte de cero,
+        solo los últimos pasos (como el «denoise» del KSampler)."""
+        if e["kind"] != "klein":
+            g[name] = {"class_type": "KSampler", "inputs": dict(samp, seed=seed_, steps=steps, denoise=den,
+                                                                latent_image=lat)}
+            return
+        full = den >= 0.999
+        g[name + "n"] = {"class_type": "RandomNoise", "inputs": {"noise_seed": seed_}}
+        g[name + "s"] = {"class_type": "Flux2Scheduler",
+                         "inputs": {"steps": steps if full else max(steps, 8), "width": sw, "height": sh}}
+        sig = [name + "s", 0]
+        if not full:
+            g[name + "x"] = {"class_type": "SplitSigmasDenoise", "inputs": {"sigmas": sig, "denoise": max(den, .15)}}
+            sig = [name + "x", 1]
+        g[name] = {"class_type": "SamplerCustomAdvanced",
+                   "inputs": {"noise": [name + "n", 0], "guider": ["guide", 0], "sampler": ["smp", 0],
+                              "sigmas": sig, "latent_image": lat}}
+
+    sampler("k1", seed, e["steps"], float(denoise) if init_name else 1.0, latent, w, h)
     g["d1"] = {"class_type": "VAEDecode", "inputs": {"samples": ["k1", 0], "vae": vae}}
     out = ["d1", 0]
     if detail:
@@ -299,9 +338,7 @@ def _workflow(engine, prompt, w, h, seed, negative=None, detail=False, init_name
                                                               "overlap": 64, "temporal_size": 64,
                                                               "temporal_overlap": 8}}
         st2 = max(4, int(e["steps"] * 0.6)) if e["steps"] > 6 else e["steps"]
-        g["k2"] = {"class_type": "KSampler", "inputs": dict(samp, seed=seed + 1, steps=st2,
-                                                            denoise=e.get("detail_denoise", 0.3),
-                                                            latent_image=["e2", 0])}
+        sampler("k2", seed + 1, st2, e.get("detail_denoise", 0.3), ["e2", 0], int(w * 1.5), int(h * 1.5))
         g["d2"] = {"class_type": "VAEDecodeTiled", "inputs": {"samples": ["k2", 0], "vae": vae, "tile_size": 1024,
                                                               "overlap": 64, "temporal_size": 64,
                                                               "temporal_overlap": 8}}
