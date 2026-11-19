@@ -49,6 +49,7 @@ ENGINES = {
                                       detail_denoise=0.30),
 }
 DEFAULT_ENGINE = AUTO
+KLEIN = "Detallada (FLUX.2 Klein)"
 # qué motor conviene para cada tipo de imagen (el primero que esté instalado)
 ROUTES = {
     "anime": ["Anime (Animagine XL 4)", "Alta calidad (Z-Image Turbo)", "Detallada (FLUX.2 Klein)",
@@ -949,6 +950,24 @@ def _guess_kind(text, style=""):
     return "art"
 
 
+_KLEIN_FOOD = re.compile(r"\b(food|dish|plate|meal|dessert|cake|ceviche|pizza|burger|soup|sushi|comida|plato|"
+                         r"postre|torta|pastel|sopa|desayuno|almuerzo|cena)\b")
+_KLEIN_PLACE = re.compile(r"\b(on the left|on the right|in the middle|in the center|next to|behind|in front of|"
+                          r"a la izquierda|a la derecha|en medio|en el centro|al lado de|detr[aá]s de|delante de)\b")
+_KLEIN_COUNT = re.compile(r"\b(two|three|four|five|six|dos|tres|cuatro|cinco|seis)\s+\w+")
+_PORTRAIT = re.compile(r"\b(portrait|close-?up|headshot|retrato|primer plano|rostro|cara de)\b")
+
+
+def prefers_klein(text):
+    """Según las pruebas en esta PC (19-11-2026): FLUX.2 Klein ganó en escenas con varios objetos en su sitio,
+    cantidades exactas y comida; Z-Image ganó en texto dentro de la imagen y retratos."""
+    low = (text or "").lower()
+    if _PORTRAIT.search(low):
+        return False
+    hits = len(_KLEIN_PLACE.findall(low)) + len(_KLEIN_COUNT.findall(low))
+    return bool(_KLEIN_FOOD.search(low)) or hits >= 2
+
+
 def pick_engine(kind, have=None):
     have = have if have is not None else available_engines()
     for e in ROUTES.get(kind, ROUTES["art"]):
@@ -1110,6 +1129,10 @@ def plan(text, style="Automático", engine=AUTO, model=None, have=None, already_
         eng = "Alta calidad (Z-Image Turbo)"
         note += (" Es una escena con muchos elementos: uso Z-Image, que entiende descripciones largas "
                  "(Animagine es mejor para un solo personaje).")
+    elif auto and kind in ("photo", "art") and KLEIN in have and prefers_klein(text + " " + str(info.get("prompt") or "")):
+        eng = KLEIN
+        note += (" Es una escena con varios objetos en su sitio (o comida): uso FLUX.2 Klein, que en las pruebas "
+                 "respetó mejor cantidades y posiciones.")
     e = ENGINES.get(eng, {})
     neg = e.get("negative", NEGATIVE)
     avoid = ", ".join(a.strip() for a in str(info.get("avoid") or "").split(",") if 0 < len(a.strip()) < 30)

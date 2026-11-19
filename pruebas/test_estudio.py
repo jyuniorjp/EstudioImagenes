@@ -250,6 +250,10 @@ class TestKlein(unittest.TestCase):
             for v in node["inputs"].values():
                 if isinstance(v, list) and len(v) == 2 and isinstance(v[0], str):
                     self.assertIn(v[0], g, name)
+        self.assertTrue(ia.prefers_klein("three lemons in the middle, a teapot on the right"))
+        self.assertTrue(ia.prefers_klein("un plato de ceviche peruano"))
+        self.assertFalse(ia.prefers_klein("retrato de una abuela con tres trenzas a la izquierda"))
+        self.assertFalse(ia.prefers_klein("a plateau in the desert"))
         z = ia._workflow("Alta calidad (Z-Image Turbo)", "a cat", 1024, 768, 3, detail=True)
         self.assertEqual(z["k2"]["class_type"], "KSampler")              # los demás modelos, igual que antes
 

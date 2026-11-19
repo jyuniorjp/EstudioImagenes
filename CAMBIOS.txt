@@ -5,6 +5,9 @@ ESTUDIO DE IMÁGENES - HISTORIAL DE CAMBIOS
   - Nuevo modelo: FLUX.2 Klein («Detallada»), ~40 s, escenas con mucho detalle; también en la 2.ª pasada de
     detalle y con imágenes de referencia. Reemplaza en el instalador a FLUX.1 schnell/dev (más lentos y peores);
     quien ya los tenga los sigue viendo. La app ahora también busca los VAE en el disco antes de ofrecer un modelo.
+  - En automático, las escenas con varios objetos en su sitio («tres limones en medio, la tetera a la derecha») o
+    con comida van a Klein, que en las pruebas en esta PC respetó mejor cantidades y posiciones. Texto dentro
+    de la imagen, retratos, miniaturas con título y anime siguen con Z-Image, que ganó ahí.
   - Tema de botones propio: iconos blancos legibles en tamaño pequeño, pestañas grandes con icono, botón principal
     destacado, títulos de sección con barra de color. Dentro de Audio Novela solo afecta al Estudio.
   - El Estudio se diseñó a sí mismo: 12 iconos (crear, ejemplos, editor, atajos, referencias, internet, carpeta,
