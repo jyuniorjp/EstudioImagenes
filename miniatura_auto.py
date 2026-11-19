@@ -974,7 +974,6 @@ def make_variants(proj, n=3):
     C con el título a la izquierda y los personajes a la derecha.
     Si TÚ dijiste dónde va cada cosa o cómo son las letras, eso no se toca: B resalta la última palabra en amarillo
     y C acerca la cámara (personaje y título más grandes)."""
-    import copy
     out = _variants(proj, n)
     alts = proj.get("alt_backgrounds") or []
     for j, v in enumerate(out[1:]):              # B y C con su propio dibujo de fondo (no el mismo dragón)

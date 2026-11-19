@@ -2,7 +2,7 @@
 ; Iconos y arte del asistente hechos con el propio Estudio (Z-Image Turbo) y convertidos a .ico/.bmp.
 
 #ifndef AppVer
-  #define AppVer "1.0.0"
+  #define AppVer "1.1.0"
 #endif
 #define AppName "Estudio de Imágenes"
 #define AppExe "EstudioImagenes.exe"

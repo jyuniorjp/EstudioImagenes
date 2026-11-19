@@ -1,0 +1,24 @@
+ESTUDIO DE IMÁGENES - HISTORIAL DE CAMBIOS
+==========================================
+
+1.1.0 (19-11-2026) - proyecto propio, optimización y revisión de errores
+  - Proyecto aparte (D:\EstudioImagenes) con su propio Python (.venv, se crea solo al compilar) y su repositorio.
+  - Arranque ~3,5 veces más rápido: la ventana abre en ~1,2 s (antes ~4,2 s con 47 imágenes). La galería se
+    llena por detrás y sus miniaturas quedan en caché (AppData\Roaming\AudioNovelaStudio\miniaturas_cache).
+  - Rueda del ratón: se desliza SOLO lo que está bajo el ratón (antes el prompt y el panel se movían a la vez) y,
+    al llegar al final, pasa a lo de fuera. La página Inspiración no se deslizaba aunque tenía tarjetas más abajo:
+    corregido (un aviso de tamaño reemplazaba al del deslizador).
+  - Estabilidad: el trabajo en segundo plano ya no lee controles de la ventana (podía cerrar la app de golpe de
+    vez en cuando); el formato de guardado y «Cuántas» se leen antes de empezar.
+  - Pruebas automáticas (pruebas\test_estudio.py, 17 pruebas): COMPILAR_IMAGENES.bat no compila si alguna falla.
+  - Revisado con pyflakes: sin avisos.
+
+1.0.x (17-18-11-2026) - lo que se fue construyendo
+  - Modelo automático (Animagine para anime y personajes conocidos, Z-Image para fotos, arte y texto), con Qwen
+    (Ollama) que prepara el pedido y se abre solo.
+  - Revisión con Gemma antes de dibujar (compara la traducción con tu texto) y después (revisa la imagen y repite
+    reforzando lo que falte). El título se revisa letra por letra.
+  - Miniaturas de YouTube: «Una imagen» estilo ChatGPT por defecto (título dibujado por la IA; si lo escribe mal,
+    letras perfectas encima) o «Por capas» (personajes recortados con pantalla de color + BiRefNet).
+  - Editor de miniaturas por capas, atajos de teclado, imágenes de referencia, personajes guardados, ampliar 2x/4x,
+    quitar fondo, guardar en cualquier formato, instalador con paquetes opcionales (Gemma incluido).

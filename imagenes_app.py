@@ -13,6 +13,10 @@ import time
 import traceback
 
 import customtkinter as ctk
+
+import ui_scroll
+
+ui_scroll.install()             # la rueda mueve solo lo que está bajo el ratón (ver ui_scroll.py)
 from PIL import Image
 
 import imagen_ia as ia
@@ -533,7 +537,9 @@ class ImageStudio(ctk.CTkFrame):
         foot.pack(fill="x", padx=8, pady=(6, 12))
         ctk.CTkButton(foot, text="💡 Consejos para describir mejor y cómo trabajan los modelos", height=34,
                       font=font(12), fg_color=SURF3, hover_color=CYAN_D, command=self.open_examples).pack(side="left")
-        page.bind("<Configure>", lambda _e: self.after_idle(self._layout_cards))
+        # add="+": sin él se borraba el aviso con el que el deslizador sabe hasta dónde llega la página, y
+        # Inspiración no se deslizaba aunque tenía tarjetas más abajo
+        page.bind("<Configure>", lambda _e: self.after_idle(self._layout_cards), add="+")
         self.after(300, self._layout_cards)
 
     def _card(self, parent, e):
@@ -616,7 +622,7 @@ class ImageStudio(ctk.CTkFrame):
         threading.Thread(target=update_shortcut_icons, args=(key,), daemon=True).start()
 
     # ---------------------------------------------------------------- miniatura automática
-    def _work_thumb(self, prompt, say):
+    def _work_thumb(self, prompt, say, opts=None):
         """Miniatura por capas: fondo + personajes sin fondo + título. Se guarda y se puede abrir en el editor."""
         import miniatura_auto
         try:
@@ -644,12 +650,12 @@ class ImageStudio(ctk.CTkFrame):
             say("Tu IA lee el pedido, decide la forma y Gemma revisa que no falte nada (~1 min)…", .02)
             proj, tp = miniatura_auto.build(prompt, say, self.cancel, have=self.avail,
                                             refs=list(getattr(self, "refs", []) or []),
-                                            versions=max(1, min(3, int(self.v_n.get()))), on_plan=show_plan)
+                                            versions=(opts or {}).get("versions", 1), on_plan=show_plan)
             self.started_server = True
-            out_dir, ext = self.out_dir, M.EXT_BY_NAME.get(self.v_sfmt.get(), ".png")
+            out_dir, ext = self.out_dir, (opts or {}).get("ext", ".png")
             os.makedirs(out_dir, exist_ok=True)
             stamp = datetime.datetime.now().strftime("miniatura_%Y%m%d_%H%M%S")
-            versions = max(1, min(3, int(self.v_n.get())))     # «Cuántas» = cuántas versiones (A, B, C)
+            versions = (opts or {}).get("versions", 1)          # «Cuántas» = cuántas versiones (A, B, C)
             variants = miniatura_auto.make_variants(proj, versions)
             paths, notes = [], {}
             for j, pv in enumerate(variants):
@@ -852,6 +858,7 @@ class ImageStudio(ctk.CTkFrame):
             else "foto"
         self.busy = True
         self.cancel.clear()
+        save_ext = M.EXT_BY_NAME.get(self.v_sfmt.get(), ".png")    # se lee aquí: el hilo no toca la ventana
 
         def say(msg, f=None):
             self._ui(lambda: (self._status(msg), self.pb.set(f) if f is not None else None))
@@ -868,7 +875,7 @@ class ImageStudio(ctk.CTkFrame):
                     out = f"{stem}_x{factor}.png"
                     ia.upscale(src, out, factor, kind, say=lambda m, f: say(f"Ampliando {factor}x… {m}", f),
                                cancel=self.cancel)
-                    ext = M.EXT_BY_NAME.get(self.v_sfmt.get(), ".png")
+                    ext = save_ext
                     if ext != ".png":
                         with Image.open(out) as im:
                             M.save_image(im.copy(), f"{stem}_x{factor}{ext}")
@@ -1112,6 +1119,9 @@ class ImageStudio(ctk.CTkFrame):
         opts["must"] = list(m.get("checks") or [])        # «Otra parecida»: se revisa con la misma lista
         import miniatura_auto
         # «miniatura de YouTube…» con el modelo en Automático: se arma sola por capas (fondo, personajes, título)
+        # lo que el trabajo necesita de la ventana se lee AQUÍ (en el hilo, leer controles de Tk puede cerrar la app)
+        opts["ext"] = M.EXT_BY_NAME.get(self.v_sfmt.get(), ".png")
+        opts["versions"] = max(1, min(3, int(self.v_n.get())))
         opts["auto_thumb"] = (m.get("kind") == "miniatura" or
                               (not meta and opts["engine"] == ia.AUTO and miniatura_auto.is_thumbnail_request(prompt)))
         self.busy = True
@@ -1126,7 +1136,7 @@ class ImageStudio(ctk.CTkFrame):
             self._ui(lambda: (self.pb.set(max(0.0, min(1.0, f))) if f is not None else None, self._status(msg)))
         try:
             if opts.get("auto_thumb"):
-                return self._work_thumb(prompt, say)
+                return self._work_thumb(prompt, say, opts)
             if english is None:
                 if translate and not self.ollama:          # se cerró Ollama: se vuelve a abrir
                     say("Abriendo tu IA (Ollama)…", 0.01)
@@ -1156,7 +1166,7 @@ class ImageStudio(ctk.CTkFrame):
             ia.free_ollama_gpu()
             if ia.start(say=say, cancel=self.cancel):
                 self.started_server = True
-            out_dir, ext = self.out_dir, M.EXT_BY_NAME.get(self.v_sfmt.get(), ".png")
+            out_dir, ext = self.out_dir, opts.get("ext", ".png")
             os.makedirs(out_dir, exist_ok=True)
             n = opts["n"]
             for i in range(n):
@@ -1235,24 +1245,50 @@ class ImageStudio(ctk.CTkFrame):
 
     # ---------------------------------------------------------------- galería
     def _load_gallery(self):
+        """La galería se llena por detrás: la ventana aparece al instante (antes tardaba ~2,5 s con 47 imágenes
+        porque cada una se abría entera para hacer su miniatura). Las miniaturas quedan en caché en disco."""
+        out_dir = self.out_dir
         try:
-            files = sorted((f for f in os.listdir(self.out_dir) if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"))
+            files = sorted((f for f in os.listdir(out_dir) if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp",
+                                                                                 ".bmp", ".tif", ".tiff"))
                             and ".tmp." not in f and ".part" not in f),
-                           key=lambda f: os.path.getmtime(os.path.join(self.out_dir, f)), reverse=True)[:MAX_THUMBS]
+                           key=lambda f: os.path.getmtime(os.path.join(out_dir, f)), reverse=True)[:MAX_THUMBS]
         except OSError:
             files = []
-        for f in reversed(files):
-            self._add_thumb(os.path.join(self.out_dir, f), first=True)
-        if files:
-            self.select(os.path.join(self.out_dir, files[0]))
-
-    def _add_thumb(self, path, first=False):
-        try:
-            with Image.open(path) as im:
-                im.thumbnail((150, 150))
-                thumb = im.convert("RGB")
-        except Exception:
+        if not files:
             return
+        paths = [os.path.join(out_dir, f) for f in files]
+
+        def work():
+            thumbs = []
+            for p in reversed(paths):
+                th = _thumb_image(p)
+                if th is not None:
+                    thumbs.append((p, th))
+
+            def show():
+                if self.out_dir != out_dir:           # cambiaste de carpeta mientras cargaba
+                    return
+                for p, th in thumbs:
+                    if p not in self._thumbs:
+                        self._add_thumb(p, first=True, thumb=th, regrid=False)
+                self._regrid()
+                if not self.current and paths[0] in self._thumbs:
+                    self.select(paths[0])
+                n = len(self._thumbs)
+                self.lbl_count.configure(text=f"{n} imagen{'es' if n != 1 else ''} tuya{'s' if n != 1 else ''}")
+            self._ui(show)
+        threading.Thread(target=work, daemon=True).start()
+
+    def _regrid(self):
+        for i, p in enumerate(self._thumbs):
+            self._thumbs[p][0].grid(row=i // 5, column=i % 5, padx=4, pady=4)
+
+    def _add_thumb(self, path, first=False, thumb=None, regrid=True):
+        if thumb is None:
+            thumb = _thumb_image(path)
+            if thumb is None:
+                return
         img = ctk.CTkImage(thumb, size=thumb.size)
         b = ctk.CTkButton(self.gal, image=img, text="", width=thumb.size[0] + 8, height=thumb.size[1] + 8,
                           fg_color="transparent", hover_color=SURF3, command=lambda p=path: self.select(p))
@@ -1265,8 +1301,8 @@ class ImageStudio(ctk.CTkFrame):
                 pass
         order = order[:MAX_THUMBS]
         self._thumbs = {p: self._thumbs[p] for p in order if p in self._thumbs}
-        for i, p in enumerate(order):
-            self._thumbs[p][0].grid(row=i // 5, column=i % 5, padx=4, pady=4)
+        if regrid:
+            self._regrid()
 
     def _meta(self, path):
         try:
@@ -1683,6 +1719,34 @@ class SetupWindow(ctk.CTkToplevel):
                 return
             self.cancel.set()
         self.destroy()
+
+
+THUMB_CACHE = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "AudioNovelaStudio", "miniaturas_cache")
+
+
+def _thumb_image(path):
+    """Miniatura de 150 px de una imagen (cualquier hilo). Se guarda en caché según ruta, fecha y tamaño: la
+    segunda vez se abre al instante; si la imagen cambia, se rehace sola."""
+    import hashlib
+    try:
+        st = os.stat(path)
+        key = hashlib.sha1(f"{path}|{st.st_mtime_ns}|{st.st_size}".encode("utf-8")).hexdigest()[:20]
+        cached = os.path.join(THUMB_CACHE, key + ".jpg")
+        if os.path.isfile(cached):
+            with Image.open(cached) as im:
+                return im.convert("RGB")
+        with Image.open(path) as im:
+            im.draft("RGB", (300, 300))              # JPG: se decodifica ya pequeño
+            im.thumbnail((150, 150), Image.Resampling.LANCZOS, reducing_gap=2.0)
+            thumb = im.convert("RGB")
+        try:
+            os.makedirs(THUMB_CACHE, exist_ok=True)
+            thumb.save(cached, "JPEG", quality=88)
+        except OSError:
+            pass
+        return thumb
+    except Exception:
+        return None
 
 
 def open_setup(master, on_done=None):

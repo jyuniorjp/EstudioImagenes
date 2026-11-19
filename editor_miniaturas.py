@@ -12,6 +12,10 @@ import threading
 import traceback
 
 import customtkinter as ctk
+
+import ui_scroll
+
+ui_scroll.install()             # la rueda mueve solo lo que está bajo el ratón (ver ui_scroll.py)
 from PIL import Image, ImageDraw
 
 import imagen_ia as ia
@@ -366,7 +370,6 @@ class ThumbEditor(ctk.CTkToplevel):
 
     def _snapshot(self):
         """Guarda el estado anterior para Ctrl+Z (se llama al dibujar, si algo cambió y no estás arrastrando)."""
-        import copy
         try:
             cur = json.dumps(self.proj, sort_keys=True, ensure_ascii=False)
         except Exception:

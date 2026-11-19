@@ -4,7 +4,7 @@ chcp 65001 >nul
 title Estudio de Imagenes - Compilando
 cd /d "%~dp0"
 set "LOG=%~dp0build_imagenes_log.txt"
-set "APPVER=1.0.0"
+set "APPVER=1.1.0"
 echo === Compilacion Estudio de Imagenes %APPVER% - %date% %time% === > "%LOG%"
 set "VPY=%~dp0.venv\Scripts\python.exe"
 if not exist "%VPY%" (
@@ -18,11 +18,17 @@ if not exist "%VPY%" (
   exit /b 1
 )
 
-echo [1/3] Probando los modulos...
-"%VPY%" -c "import numpy, imagen_ia, imagenes_app, instalar_ia, editor_miniaturas, miniaturas, miniatura_auto, web_ayuda, customtkinter, websockets.sync.client; print('IMPORT_OK')" >> "%LOG%" 2>&1
+echo [1/3] Probando los modulos y las pruebas automaticas...
+"%VPY%" -c "import numpy, imagen_ia, imagenes_app, instalar_ia, editor_miniaturas, miniaturas, miniatura_auto, web_ayuda, ui_scroll, customtkinter, websockets.sync.client; print('IMPORT_OK')" >> "%LOG%" 2>&1
 if errorlevel 1 (
   echo ERROR en los modulos: revisa build_imagenes_log.txt
   echo BUILD_FAIL >> "%LOG%"
+  exit /b 1
+)
+"%VPY%" -m unittest discover -s "%~dp0pruebas" >> "%LOG%" 2>&1
+if errorlevel 1 (
+  echo ERROR: alguna prueba automatica fallo. Revisa build_imagenes_log.txt
+  echo TESTS_FAIL >> "%LOG%"
   exit /b 1
 )
 
