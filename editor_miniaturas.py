@@ -16,6 +16,8 @@ import customtkinter as ctk
 import ui_scroll
 
 ui_scroll.install()             # la rueda mueve solo lo que está bajo el ratón (ver ui_scroll.py)
+
+import ui_iconos                # iconos dibujados por el propio Estudio
 from PIL import Image, ImageDraw
 
 import imagen_ia as ia
@@ -132,6 +134,7 @@ class ThumbEditor(ctk.CTkToplevel):
         self.protocol("WM_DELETE_WINDOW", self._close)
         self._undo, self._redo, self._last_state = [], [], None
         self._bind_keys()
+        self.after(60, lambda: ui_iconos.apply(self))
         self.after(200, self.lift)
 
     # ------------------------------------------------------------------ interfaz

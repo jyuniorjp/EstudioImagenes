@@ -196,5 +196,17 @@ class Registro(unittest.TestCase):
             app.CFG = old_cfg
 
 
+class Iconos(unittest.TestCase):
+    def test_todos_los_iconos_existen_y_son_transparentes(self):
+        from PIL import Image
+        import ui_iconos
+        for name in {v[0] for v in ui_iconos.BY_TEXT.values()} | {"portada", "vacio"}:
+            p = ui_iconos.res("ui_iconos", name + ".png")
+            self.assertTrue(os.path.isfile(p), name)
+            with Image.open(p) as im:
+                self.assertEqual(im.mode, "RGBA", name)
+                self.assertLess(im.getchannel("A").getextrema()[0], 10, name)   # tiene partes transparentes
+
+
 if __name__ == "__main__":
     unittest.main()

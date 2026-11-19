@@ -19,7 +19,7 @@ if not exist "%VPY%" (
 )
 
 echo [1/3] Probando los modulos y las pruebas automaticas...
-"%VPY%" -c "import numpy, imagen_ia, imagenes_app, instalar_ia, editor_miniaturas, miniaturas, miniatura_auto, web_ayuda, ui_scroll, customtkinter, websockets.sync.client; print('IMPORT_OK')" >> "%LOG%" 2>&1
+"%VPY%" -c "import numpy, imagen_ia, imagenes_app, instalar_ia, editor_miniaturas, miniaturas, miniatura_auto, web_ayuda, ui_scroll, ui_iconos, customtkinter, websockets.sync.client; print('IMPORT_OK')" >> "%LOG%" 2>&1
 if errorlevel 1 (
   echo ERROR en los modulos: revisa build_imagenes_log.txt
   echo BUILD_FAIL >> "%LOG%"
@@ -33,7 +33,7 @@ if errorlevel 1 (
 )
 
 echo [2/3] Compilando EstudioImagenes.exe...
-"%VPY%" -m PyInstaller --noconfirm --clean --onefile --windowed --name EstudioImagenes --icon "%~dp0iconos_imagenes\neon.ico" --add-data "%~dp0iconos_imagenes;iconos_imagenes" --add-data "%~dp0ejemplos_ia;ejemplos_ia" --add-data "%~dp0estudio_imagenes.ico;." --add-data "%~dp0fuentes;fuentes" --add-data "%~dp0quitar_fondo.py;." --collect-all customtkinter --hidden-import websockets.sync.client --hidden-import instalar_ia --hidden-import editor_miniaturas --hidden-import miniaturas --hidden-import web_ayuda --hidden-import miniatura_auto --exclude-module pygame --exclude-module matplotlib --distpath dist_imagenes --workpath build_imagenes --specpath build_imagenes imagenes_app.py >> "%LOG%" 2>&1
+"%VPY%" -m PyInstaller --noconfirm --clean --onefile --windowed --name EstudioImagenes --icon "%~dp0iconos_imagenes\neon.ico" --add-data "%~dp0iconos_imagenes;iconos_imagenes" --add-data "%~dp0ejemplos_ia;ejemplos_ia" --add-data "%~dp0estudio_imagenes.ico;." --add-data "%~dp0fuentes;fuentes" --add-data "%~dp0ui_iconos;ui_iconos" --add-data "%~dp0quitar_fondo.py;." --collect-all customtkinter --hidden-import websockets.sync.client --hidden-import instalar_ia --hidden-import editor_miniaturas --hidden-import miniaturas --hidden-import web_ayuda --hidden-import miniatura_auto --exclude-module pygame --exclude-module matplotlib --distpath dist_imagenes --workpath build_imagenes --specpath build_imagenes imagenes_app.py >> "%LOG%" 2>&1
 if not exist "dist_imagenes\EstudioImagenes.exe" (
   echo ERROR al compilar: revisa build_imagenes_log.txt
   echo BUILD_FAIL >> "%LOG%"

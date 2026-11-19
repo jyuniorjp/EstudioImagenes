@@ -1,7 +1,13 @@
 ESTUDIO DE IMÁGENES - HISTORIAL DE CAMBIOS
 ==========================================
 
-1.1.0 (19-11-2026) - proyecto propio, optimización y revisión de errores
+1.1.0 (19-11-2026) - proyecto propio, optimización, revisión de errores y diseño propio
+  - El Estudio se diseñó a sí mismo: 12 iconos (crear, ejemplos, editor, atajos, referencias, internet, carpeta,
+    guardar, otra parecida, inspiración, galería, más) y 2 ilustraciones (portada de Inspiración y «Mis imágenes»
+    vacía) dibujados con su propio motor (herramientas\generar_iconos.py y generar_arte.py), recortados y con
+    fondo transparente. Reemplazan los emojis, que en Windows se veían distintos o como cuadritos.
+  - Las sugerencias rápidas de la portada pasan a otra fila si no caben (antes «Acuarela» salía cortada y
+    «Avatar» quedaba oculta).
   - Proyecto aparte (D:\EstudioImagenes) con su propio Python (.venv, se crea solo al compilar) y su repositorio.
   - Arranque ~3,5 veces más rápido: la ventana abre en ~1,2 s (antes ~4,2 s con 47 imágenes). La galería se
     llena por detrás y sus miniaturas quedan en caché (AppData\Roaming\AudioNovelaStudio\miniaturas_cache).

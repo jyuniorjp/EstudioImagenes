@@ -17,6 +17,8 @@ import customtkinter as ctk
 import ui_scroll
 
 ui_scroll.install()             # la rueda mueve solo lo que está bajo el ratón (ver ui_scroll.py)
+
+import ui_iconos                # iconos e ilustraciones dibujados por el propio Estudio
 from PIL import Image
 
 import imagen_ia as ia
@@ -172,13 +174,14 @@ class ImageStudio(ctk.CTkFrame):
                       hover_color=CYAN_D, command=self.open_examples).pack(side="left")
         ctk.CTkButton(brow, text="🎬 Editor de miniaturas", height=28, width=10, font=font(12, "bold"),
                       fg_color="#7c2d12", hover_color="#c2410c", command=self.open_thumb).pack(side="left", padx=6)
-        ctk.CTkButton(brow, text="⌨", height=28, width=30, font=font(13), fg_color=SURF3, hover_color=CYAN_D,
-                      command=self.show_keys).pack(side="left")
+
         rrow = ctk.CTkFrame(left, fg_color="transparent")
         rrow.pack(fill="x", padx=8, pady=(6, 0))
         ctk.CTkButton(rrow, text="📎 Subir imágenes de referencia", height=32, width=10, font=font(12, "bold"),
                       fg_color="#1e3a5f", hover_color=CYAN_D, border_color=CYAN_D, border_width=1,
                       command=self.pick_reference).pack(side="left")
+        ctk.CTkButton(rrow, text="⌨", height=32, width=34, font=font(13), fg_color=SURF3, hover_color=CYAN_D,
+                      command=self.show_keys).pack(side="right")
         self.lbl_ref = ctk.CTkLabel(rrow, text="", font=font(11), text_color=MUTED)
         self.lbl_ref.pack(side="left", padx=6)
         ctk.CTkLabel(left, text="Para editar una imagen tuya o inspirarse en ella (hasta 3; también Ctrl+V para "
@@ -372,7 +375,9 @@ class ImageStudio(ctk.CTkFrame):
         self.view_box = ctk.CTkFrame(right, fg_color=SURF2, corner_radius=10)
         self.view_box.grid(row=0, column=0, sticky="nsew", padx=10, pady=(10, 6))
         self.view_box.grid_propagate(False)
+        self._empty_art = ui_iconos.art("vacio", (220, 220))
         self.view = ctk.CTkLabel(self.view_box, text="Aquí aparecerá tu imagen", font=font(14), text_color=MUTED,
+                                 image=self._empty_art, compound="top",
                                  fg_color="transparent")
         self.view.place(relx=0.5, rely=0.5, anchor="center")
         self._big_job, self._big_key, self._pil = None, None, None
@@ -407,6 +412,7 @@ class ImageStudio(ctk.CTkFrame):
                 self.after(900, self.open_setup)
         threading.Thread(target=self._find_ollama, daemon=True).start()
         self.after(300, self._bind_keys)
+        self.after(60, lambda: ui_iconos.apply(self))
         self.after(8000, self._cleanup_later)
 
     def _cleanup_later(self):
@@ -524,21 +530,31 @@ class ImageStudio(ctk.CTkFrame):
         self._insp_imgs, self._cards, self._insp_cols = [], [], 0
         hero = ctk.CTkFrame(page, fg_color=SURF2, corner_radius=16)
         hero.pack(fill="x", padx=8, pady=(4, 10))
-        ctk.CTkLabel(hero, text="¿Qué quieres crear hoy?", font=font(28, "bold"), text_color=TXT).pack(
+        top = ctk.CTkFrame(hero, fg_color="transparent")
+        top.pack(fill="x")
+        himg = ui_iconos.art("portada", (300, 132))      # ilustración dibujada por el propio Estudio
+        if himg is not None:
+            ctk.CTkLabel(top, image=himg, text="", corner_radius=12).pack(side="right", padx=(8, 16), pady=(14, 4))
+        ctk.CTkLabel(top, text="¿Qué quieres crear hoy?", font=font(28, "bold"), text_color=TXT).pack(
             anchor="w", padx=22, pady=(18, 0))
-        ctk.CTkLabel(hero, text="Escribe tu idea en español a la izquierda, o empieza con una de estas. Tu IA elige el "
-                                "mejor modelo y dibuja en tu PC, sin internet.", font=font(13), text_color=MUTED,
-                     justify="left", wraplength=900).pack(anchor="w", padx=22, pady=(2, 10))
+        ctk.CTkLabel(top, text="Escribe tu idea en español a la izquierda, o empieza con una de estas. Tu IA elige el "
+                               "mejor modelo y dibuja en tu PC, sin internet.", font=font(13), text_color=MUTED,
+                     justify="left", wraplength=560 if himg is not None else 900).pack(anchor="w", padx=22,
+                                                                                      pady=(2, 10))
         chips = ctk.CTkFrame(hero, fg_color="transparent")
-        chips.pack(anchor="w", padx=18, pady=(0, 16))
-        ctk.CTkButton(chips, text="🎬 Miniatura para YouTube", height=30, width=10, corner_radius=15,
-                      font=font(12, "bold"), fg_color="#c2410c", hover_color="#ea580c",
-                      command=self.open_thumb).pack(side="left", padx=4, pady=2)
+        chips.pack(fill="x", padx=18, pady=(0, 16))
+        self._chips = [ctk.CTkButton(chips, text="🎬 Miniatura para YouTube", height=30, width=10, corner_radius=15,
+                                     font=font(12, "bold"), fg_color="#c2410c", hover_color="#ea580c",
+                                     command=self.open_thumb)]
         for label, idx in QUICK:
             if idx < len(self._ex):
-                ctk.CTkButton(chips, text=label, height=30, width=10, corner_radius=15, font=font(12),
-                              fg_color=SURF3, hover_color=CYAN_D, border_width=1, border_color=LINE,
-                              command=lambda e=self._ex[idx]: self._use_example(e)).pack(side="left", padx=4, pady=2)
+                self._chips.append(ctk.CTkButton(chips, text=label, height=30, width=10, corner_radius=15,
+                                                 font=font(12), fg_color=SURF3, hover_color=CYAN_D, border_width=1,
+                                                 border_color=LINE,
+                                                 command=lambda e=self._ex[idx]: self._use_example(e)))
+        # las sugerencias pasan a otra fila si no caben (antes la última salía cortada: «Acuarel…»)
+        chips.bind("<Configure>", lambda e: self._flow_chips(e.width), add="+")
+        self._flow_chips(900)
         cats = ctk.CTkFrame(page, fg_color="transparent")
         cats.pack(fill="x", padx=10, pady=(0, 4))
         self.v_cat = ctk.StringVar(value="Todo")
@@ -559,6 +575,22 @@ class ImageStudio(ctk.CTkFrame):
         # Inspiración no se deslizaba aunque tenía tarjetas más abajo
         page.bind("<Configure>", lambda _e: self.after_idle(self._layout_cards), add="+")
         self.after(300, self._layout_cards)
+
+    def _flow_chips(self, width):
+        """Coloca las sugerencias rápidas una tras otra y pasa a otra fila cuando no caben (sin cortar ninguna)."""
+        if width < 50 or getattr(self, "_chips_w", None) == width or not self._chips:
+            return
+        self._chips_w = width
+        x = y = 0
+        rowh = 0
+        for b in self._chips:
+            w, h = b.winfo_reqwidth(), b.winfo_reqheight()
+            if x and x + w > width:
+                x, y = 0, y + rowh + 6
+            b.place(x=x, y=y)
+            x += w + 8
+            rowh = max(rowh, h)
+        self._chips[0].master.configure(height=y + rowh + 2)
 
     def _card(self, parent, e):
         card = ctk.CTkFrame(parent, fg_color=SURF2, corner_radius=14, border_width=1, border_color=LINE)
