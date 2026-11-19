@@ -60,7 +60,9 @@ def finish(name):
     raw = os.path.join(ROOT, "herramientas", "_crudos", name + ".png")
     with Image.open(raw) as im:
         out = dark_to_alpha(im)
-    out.save(os.path.join(OUT, name + ".png"))
+    w = 900 if name == "portada" else 480          # se muestra pequeña: no hace falta guardarla enorme
+    out = out.resize((w, int(out.height * w / out.width)), Image.Resampling.LANCZOS)
+    out.save(os.path.join(OUT, name + ".png"), optimize=True)
     old = os.path.join(OUT, name + ".jpg")
     if os.path.isfile(old):
         os.remove(old)
