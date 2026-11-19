@@ -251,6 +251,18 @@ class ImageStudio(ctk.CTkFrame):
         ctk.CTkLabel(left, text="Rápido: ~30 s, cabe en tu tarjeta. Exigente (Gemma 4 12B): ~3 min, más estricto. "
                                 "El pulido usa siempre el rápido.", font=font(11), text_color=MUTED, justify="left",
                      wraplength=300).pack(anchor="w", padx=8)
+        import miniatura_auto as _ma
+        frow = ctk.CTkFrame(left, fg_color="transparent")
+        frow.pack(fill="x", padx=8, pady=(12, 0))
+        ctk.CTkLabel(frow, text="Forma de la miniatura", font=font(12, "bold"), text_color=TXT).pack(side="left")
+        self.v_form = ctk.StringVar(value=_ma.mode_choice())
+        ctk.CTkOptionMenu(frow, values=list(_ma.MODES), variable=self.v_form, width=130, font=font(12),
+                          fg_color=SURF3, button_color=SURF3, button_hover_color=CYAN_D,
+                          command=lambda v: _ma.set_mode(v)).pack(side="left", padx=8)
+        ctk.CTkLabel(left, text="Automática: tu IA elige. «Una imagen» (1-2 min): todo en una escena, ideal si los "
+                                "personajes interactúan. «Por capas» (5-12 min): cada cosa aparte, para tus personajes "
+                                "guardados y posiciones exactas. El título siempre con letras perfectas.",
+                     font=font(11), text_color=MUTED, justify="left", wraplength=300).pack(anchor="w", padx=8)
         srow = ctk.CTkFrame(left, fg_color="transparent")
         srow.pack(fill="x", padx=8, pady=(12, 0))
         ctk.CTkLabel(srow, text="Fondo para recortar personajes", font=font(12, "bold"), text_color=TXT).pack(
@@ -611,14 +623,17 @@ class ImageStudio(ctk.CTkFrame):
                                                          "con fondo transparente y título con letras perfectas)."))
             def show_plan(tp):
                 gen_es = {"female": "mujer", "male": "hombre"}
-                txt = ("FONDO: " + tp.get("background", "") + "\n\nPERSONAJES:\n" +
+                txt = (("FORMA: " + ("una imagen" if tp.get("mode") == "single" else "por capas") + " — " +
+                        tp.get("mode_reason", "") + "\n\n" if tp.get("mode_reason") else "") +
+                       "FONDO: " + tp.get("background", "") + "\n\nPERSONAJES:\n" +
                        ("\n".join("• " + (f"[{gen_es[c['gender']]}] " if c.get("gender") in gen_es else "") +
                                   str(c.get("desc") or "") for c in tp.get("characters", [])) or "sin personajes") +
                        (f"\n\nTÍTULO: «{tp['title']}»" if tp.get("title") else "") +
                        ("\n\n" + tp["review_note"] if tp.get("review_note") else ""))
+                why = " ".join(x for x in (tp.get("mode_reason"), tp.get("review_note")) if x)
                 self._ui(lambda: (self.en.delete("1.0", "end"), self.en.insert("1.0", txt),
-                                  self.lbl_why.configure(text=tp.get("review_note") or "")))
-            say("Tu IA separa el pedido en capas y Gemma revisa que no falte nada (~40 s)…", .02)
+                                  self.lbl_why.configure(text=why)))
+            say("Tu IA lee el pedido, decide la forma y Gemma revisa que no falte nada (~1 min)…", .02)
             proj, tp = miniatura_auto.build(prompt, say, self.cancel, have=self.avail,
                                             refs=list(getattr(self, "refs", []) or []),
                                             versions=max(1, min(3, int(self.v_n.get()))), on_plan=show_plan)

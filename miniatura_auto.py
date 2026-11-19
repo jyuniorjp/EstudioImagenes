@@ -346,7 +346,208 @@ _CHAR_NEG = ("cropped, out of frame, cut off, scenery, detailed background, sky,
              "wind effects, floating particles, frame, border")
 
 
-def build(text, say=None, cancel=None, have=None, refs=(), screen=None, versions=1, on_plan=None):
+# ------------------------------------------------------------------ ¿una sola imagen o por capas?
+MODE_CFG = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "AudioNovelaStudio", "forma.json")
+MODES = {"Automática": "auto", "Una imagen": "single", "Por capas": "layers"}
+_INTERACT = re.compile(
+    r"\b(montad[oa]s?|monta|cabalga\w*|riding|rides?|abraz\w*|hug\w*|en (sus )?brazos|in (his|her|their) arms|"
+    r"carg(a|ando|ada|ado)|sostenid[oa] por|en la mano del?|in the hand of|sobre el lomo|on the back of|"
+    r"bes(a|an|ando)\b|kiss\w*|pelea\w* contra|luch\w* contra|fight(s|ing) (with|against)|"
+    r"sentad[oa]s? (en|sobre)|sitting on|de la mano|hand in hand|espalda con espalda|back to back)\b", re.I)
+
+
+def mode_choice():
+    try:
+        with open(MODE_CFG, encoding="utf-8") as f:
+            v = json.load(f).get("forma")
+        return v if v in MODES else "Automática"
+    except Exception:
+        return "Automática"
+
+
+def set_mode(name):
+    try:
+        os.makedirs(os.path.dirname(MODE_CFG), exist_ok=True)
+        with open(MODE_CFG, "w", encoding="utf-8") as f:
+            json.dump({"forma": name if name in MODES else "Automática"}, f)
+    except OSError:
+        pass
+
+
+def mode_wish():
+    return MODES.get(mode_choice(), "auto")
+
+
+def decide_mode(text, tp, saved=None, ref_chars=(), wish="auto"):
+    """('single' | 'layers', motivo en español). Por capas cuando hace falta control o personajes tuyos; una sola
+    imagen cuando todo convive en la escena (más natural y unas 5 veces más rápida). El título siempre lo pone
+    la app con letras perfectas."""
+    if wish == "single":
+        return "single", "Elegiste «Una imagen»: escena completa y el título encima con letras perfectas."
+    if wish == "layers":
+        return "layers", "Elegiste «Por capas»: fondo, personajes recortados y título por separado."
+    chars = tp.get("characters") or []
+    low = text.lower()
+    if saved or ref_chars:
+        return "layers", "Usas un personaje tuyo (guardado o PNG): va por capas, tal cual, sin redibujarlo."
+    if _INTERACT.search(low):
+        return "single", ("Los personajes interactúan entre sí o con la escena: una sola imagen, para que el contacto "
+                          "y la luz sean naturales.")
+    if not chars:
+        return "single", "No hay personaje principal: una sola imagen, más rápida."
+    if len(chars) >= 2:
+        return "layers", "Hay varios personajes en lugares concretos: por capas, para colocar a cada uno."
+    c = chars[0]
+    if c.get("name") and c.get("series") and len(str(tp.get("background", "")).split()) > 25:
+        return "layers", ("Personaje conocido con un fondo complejo: Animagine dibuja al personaje (lo conoce) y "
+                          "Z-Image el fondo.")
+    if c.get("_user_pos") and re.search(r"\b(grande|mediano|mediana|pequeñ[oa]|large|big|medium|small)\b", low):
+        return "layers", "Pediste el lugar y el tamaño exactos del personaje: por capas, para respetarlos."
+    return "single", "Un personaje integrado en la escena: una sola imagen, más natural y rápida."
+
+
+def build_single(text, tp, spec, say, cancel, have, ref_bg, versions, stamp):
+    """Una sola imagen (escena con sus personajes) + título y subtítulo encima con letras perfectas.
+    Gemma revisa la imagen contra tu pedido y se redibuja reforzando lo que falte."""
+    chars = tp.get("characters") or []
+    where = {"left": "on the left side", "right": "on the right side", "center": "in the center"}
+    size = {"large": "large in the foreground", "medium": "medium size", "small": "small, further back"}
+    parts = []
+    for c in chars:
+        frame = framing_of(str(c.get("desc", "")) + " " + text)[2]
+        extra = ", ".join(x for x in (where.get(str(c.get("position", "")).lower(), ""),
+                                     size.get(str(c.get("size", "")).lower(), ""), frame) if x)
+        who = (f"{c['name']} from {c.get('series', '')}, " if c.get("name") else "") + str(c.get("desc", ""))
+        parts.append(f"{who} ({extra})" if extra else who)
+    place0 = tp.get("title_place") or {"right": "top-right", "left": "top-left"}.get(spec.get("position"),
+                                                                                    spec.get("position") or "top")
+    spot = {"top-right": "the upper right corner", "top-left": "the upper left corner", "right": "the right side",
+            "left": "the left side", "bottom": "the lower part", "bottom-right": "the lower right corner",
+            "bottom-left": "the lower left corner", "center": "the center"}.get(place0, "the upper part")
+    style = (" Modern anime manhwa digital illustration, sharp clean linework, cinematic lighting." if tp["anime"]
+             else " Cinematic, dramatic lighting.")
+    scene = ((" ".join(p.rstrip(".") + "." for p in parts) + " ") if parts else "") + \
+        "Setting: " + str(tp.get("background", "")).rstrip(".") + "." + style + \
+        f" Keep {spot} calmer (sky or soft light) for a title, as part of the same painting. No text, no letters, " \
+        "no logos, no watermark."
+    eng = "Alta calidad (Z-Image Turbo)" if "Alta calidad (Z-Image Turbo)" in have else have[0]
+    neg = ia.ENGINES[eng].get("negative", ia.NEGATIVE)
+    fandom = any(c.get("name") and c.get("series") for c in chars)
+    if fandom and tp["anime"] and "Anime (Animagine XL 4)" in have:
+        # personaje conocido: Animagine lo dibuja con su etiqueta (la escena se le pide en etiquetas)
+        pl = ia.plan(scene, "Anime", "Anime (Animagine XL 4)", model=ia.ollama_model(), have=have, already_english=True)
+        eng, scene, neg = pl["engine"], pl["prompt"], pl["negative"]
+    must = list(tp.get("background_must") or [])
+    for c in chars:
+        must += [m for m in (c.get("must") or []) if m not in must]
+    must = must[:6]
+    tags = ia.ENGINES[eng].get("words") == "tags"
+    ia.free_ollama_gpu()
+    ia.start(say=lambda m, f: say(m, .05), cancel=cancel)
+    img = os.path.join(WORK, f"auto_escena_{stamp}.png")
+    best, best_miss = None, None
+    for attempt in range(2 if must else 1):     # Gemma revisa la escena; si falta algo, otra vez reforzándolo
+        if cancel is not None and cancel.is_set():
+            raise RuntimeError("CANCELLED")
+        out = img if attempt == 0 else img.replace(".png", f"_{attempt}.png")
+        ia.generate(ia.emphasize(scene, best_miss or [], tags), out, eng, (1344, 768), "", cancel=cancel,
+                    negative=neg, init_image=ref_bg, strength=.6,
+                    say=lambda m, f: say("Escena: " + m, .06 + .7 * f))
+        if not must or not ia.vision_model():
+            best = out
+            break
+        say("Tu IA revisa que la escena tenga lo que pediste…", None)
+        miss = ia.verify_image(out, must)
+        if best_miss is None or len(miss) < len(best_miss):
+            best, best_miss = out, miss
+        if not miss:
+            break
+        say("A la escena le falta: " + "; ".join(miss) + ". La dibujo otra vez reforzando eso…", None)
+    ia.release_vision()
+    if best != img:
+        Image.open(best).save(img)
+    tp["background_missing"] = best_miss or []
+    alts = []
+    for j in range(max(0, int(versions) - 1)):   # versiones B y C: el mismo pedido, otra escena
+        if cancel is not None and cancel.is_set():
+            raise RuntimeError("CANCELLED")
+        p = img.replace(".png", f"_v{j + 2}.png")
+        ia.generate(ia.emphasize(scene, best_miss or [], tags), p, eng, (1344, 768), "", cancel=cancel,
+                    negative=neg, init_image=ref_bg, strength=.6,
+                    say=lambda m, f, j=j: say(f"Escena de la versión {'BC'[j]}: " + m, None))
+        alts.append(p)
+    glow = dominant_light(img)
+    layers = [{"kind": "image", "path": img, "cover": True, "x": .5, "y": .5}]
+    shade_side = _add_texts(text, tp, spec, layers)
+    proj = {"size": [1280, 720], "layers": layers, "alt_backgrounds": alts, "mode": "single",
+            "lock": {"layout": True,
+                     "style": bool(spec.get("fill") or spec.get("stroke") or spec.get("style") != "Impacto")},
+            "fx": {"shade": .45 if tp["title"] else 0, "shade_side": shade_side, "vignette": .45,
+                   "embers": .5 if tp["embers"] else 0, "embers_color": glow}}
+    say("Miniatura lista.", 1.0)
+    return proj, tp
+
+
+
+def _add_texts(text, tp, spec, layers):
+    """Título y subtítulo con letras perfectas, donde y como los pediste. Devuelve el lado de la sombra."""
+    shade_side = "top"
+    if tp["title"]:
+        place = tp.get("title_place") or {"right": "top-right", "left": "top-left"}.get(spec.get("position"),
+                                                                                      spec.get("position") or "top")
+        lay = {"kind": "text", "style": tp["title_style"]}
+        side = "right" if place.endswith("right") else "left" if place.endswith("left") else ""
+        if side:                                     # a un costado: dos líneas grandes
+            y0 = {"top": .05, "bottom": .52}.get(place.split("-")[0], .22)
+            lay.update(text=_split_title(tp["title"]), align=side, x=.965 if side == "right" else .035, y=y0,
+                       size=.17 if place.startswith(("top", "bottom")) else .19, max_w=.5)
+            shade_side = side
+        elif place == "bottom":
+            lay.update(text=tp["title"], align="center", x=.5, y=.72, size=.15 if len(tp["title"]) < 22 else .12)
+            shade_side = "bottom"
+        else:
+            lay.update(text=tp["title"], align="center", x=.5, y=.035 if place == "top" else .4,
+                       size=.15 if len(tp["title"]) < 22 else .12)
+        if spec.get("fill"):
+            lay["fill"] = spec["fill"]
+        if spec.get("stroke"):
+            lay["stroke"] = spec["stroke"]
+            lay["stroke_w"] = .11 if spec.get("thick") else .075
+            lay["glow"] = "#000000"             # sombra oscura: el borde de color resalta más
+        if spec.get("glow"):                     # «brillo verde»: lo pediste tú
+            lay["glow"] = spec["glow"]
+        layers.append(lay)
+    if tp["subtitle"]:
+        tl = next((l for l in layers if l.get("kind") == "text"), None)
+        if tl:                                       # junto al título: debajo (o encima si lo pediste)
+            # se MIDE el título ya dibujado (antes se calculaba a ojo y «CAP 1-5» quedaba encima de «CRONOS»)
+            try:
+                timg, _tx, ty = M.render_text(tl, 1280, 720)
+                bb = timg.getchannel("A").point(lambda v: 255 if v > 90 else 0).getbbox()
+                below = (ty + (bb[3] if bb else timg.height)) / 720 + .01
+            except Exception:
+                below = tl["y"] + tl["size"] * ((tl["text"].count("\n") + 1) * 1.25 + .3)
+            sub_y = max(.02, tl["y"] - .1) if tp.get("subtitle_place") == "above_title" else \
+                (.86 if tp.get("subtitle_place") == "bottom" else min(.88, below))
+            if tp.get("subtitle_place") == "above_title":
+                tl["y"] = min(.8, tl["y"] + .09)
+        else:
+            sub_y = .22
+        sl = {"kind": "text", "text": tp["subtitle"], "style": "Elegante", "x": tl.get("x", .5) if tl else .5,
+              "y": sub_y, "size": .065, "align": tl.get("align", "center") if tl else "center"}
+        ss = ia.title_spec(text, tp["subtitle"])          # «"CAP 1-5" en letras doradas con borde negro»
+        if ss.get("fill") or ss.get("stroke"):
+            sl.update(style="Impacto", size=.08)
+            for k in ("fill", "stroke", "glow"):
+                if ss.get(k):
+                    sl[k] = ss[k]
+            if ss.get("stroke"):
+                sl["stroke_w"] = .1 if ss.get("thick") else .07
+        layers.append(sl)
+    return shade_side
+
+
+def build(text, say=None, cancel=None, have=None, refs=(), screen=None, versions=1, on_plan=None, mode=None):
     """Hace todo. Devuelve (proyecto, plan). say(mensaje, fracción).
     refs: tus imágenes de referencia. Las PNG con fondo transparente se usan como personajes tal cual; la primera
     imagen normal es la base del fondo (se redibuja a partir de ella)."""
@@ -364,12 +565,16 @@ def build(text, say=None, cancel=None, have=None, refs=(), screen=None, versions
     say("Tu IA separa el pedido en capas (fondo, personajes, título)…", .02)
     saved = find_saved(text)
     tp = thumb_plan(text, model, tuple(saved))
+    spec = tp.get("title_spec") or ia.title_spec(text)
+    form, why = decide_mode(text, tp, saved, ref_chars, mode or mode_wish())
+    tp["mode"], tp["mode_reason"] = form, why
     if on_plan:                                   # la app muestra al instante lo que se va a dibujar (en inglés)
         try:
             on_plan(tp)
         except Exception:
             pass
-    spec = tp.get("title_spec") or ia.title_spec(text)
+    if form == "single":
+        return build_single(text, tp, spec, say, cancel, have, ref_bg, versions, stamp)
     if ref_chars and len(tp["characters"]) < len(ref_chars):      # tus PNG transparentes son personajes
         tp["characters"] += [{"desc": "", "position": ""} for _ in range(len(ref_chars) - len(tp["characters"]))]
     tp["characters"] = tp["characters"][:3]
@@ -550,60 +755,7 @@ def build(text, say=None, cancel=None, have=None, refs=(), screen=None, versions
             y = 1.0 - h / 2 + .01                 # pegado al borde de abajo: no se nota dónde termina
         layers.insert(1 + k, {"kind": "image", "path": fin, "x": xs[slot], "y": y, "h": h,
                               "glow": glow, "glow_size": .32})
-    # 3) textos (dónde y cómo los pediste)
-    shade_side = "top"
-    if tp["title"]:
-        place = tp.get("title_place") or {"right": "top-right", "left": "top-left"}.get(spec.get("position"),
-                                                                                      spec.get("position") or "top")
-        lay = {"kind": "text", "style": tp["title_style"]}
-        side = "right" if place.endswith("right") else "left" if place.endswith("left") else ""
-        if side:                                     # a un costado: dos líneas grandes
-            y0 = {"top": .05, "bottom": .52}.get(place.split("-")[0], .22)
-            lay.update(text=_split_title(tp["title"]), align=side, x=.965 if side == "right" else .035, y=y0,
-                       size=.17 if place.startswith(("top", "bottom")) else .19, max_w=.5)
-            shade_side = side
-        elif place == "bottom":
-            lay.update(text=tp["title"], align="center", x=.5, y=.72, size=.15 if len(tp["title"]) < 22 else .12)
-            shade_side = "bottom"
-        else:
-            lay.update(text=tp["title"], align="center", x=.5, y=.035 if place == "top" else .4,
-                       size=.15 if len(tp["title"]) < 22 else .12)
-        if spec.get("fill"):
-            lay["fill"] = spec["fill"]
-        if spec.get("stroke"):
-            lay["stroke"] = spec["stroke"]
-            lay["stroke_w"] = .11 if spec.get("thick") else .075
-            lay["glow"] = "#000000"             # sombra oscura: el borde de color resalta más
-        if spec.get("glow"):                     # «brillo verde»: lo pediste tú
-            lay["glow"] = spec["glow"]
-        layers.append(lay)
-    if tp["subtitle"]:
-        tl = next((l for l in layers if l.get("kind") == "text"), None)
-        if tl:                                       # junto al título: debajo (o encima si lo pediste)
-            # se MIDE el título ya dibujado (antes se calculaba a ojo y «CAP 1-5» quedaba encima de «CRONOS»)
-            try:
-                timg, _tx, ty = M.render_text(tl, 1280, 720)
-                bb = timg.getchannel("A").point(lambda v: 255 if v > 90 else 0).getbbox()
-                below = (ty + (bb[3] if bb else timg.height)) / 720 + .01
-            except Exception:
-                below = tl["y"] + tl["size"] * ((tl["text"].count("\n") + 1) * 1.25 + .3)
-            sub_y = max(.02, tl["y"] - .1) if tp.get("subtitle_place") == "above_title" else \
-                (.86 if tp.get("subtitle_place") == "bottom" else min(.88, below))
-            if tp.get("subtitle_place") == "above_title":
-                tl["y"] = min(.8, tl["y"] + .09)
-        else:
-            sub_y = .22
-        sl = {"kind": "text", "text": tp["subtitle"], "style": "Elegante", "x": tl.get("x", .5) if tl else .5,
-              "y": sub_y, "size": .065, "align": tl.get("align", "center") if tl else "center"}
-        ss = ia.title_spec(text, tp["subtitle"])          # «"CAP 1-5" en letras doradas con borde negro»
-        if ss.get("fill") or ss.get("stroke"):
-            sl.update(style="Impacto", size=.08)
-            for k in ("fill", "stroke", "glow"):
-                if ss.get(k):
-                    sl[k] = ss[k]
-            if ss.get("stroke"):
-                sl["stroke_w"] = .1 if ss.get("thick") else .07
-        layers.append(sl)
+    shade_side = _add_texts(text, tp, spec, layers)
     explicit_pos = bool(re.search(r"\b(left|right|izquierda|derecha|center|centro)\b", text.lower()))
     proj = {"size": [1280, 720], "layers": layers, "alt_backgrounds": alt_bgs,
             "lock": {"layout": bool(spec.get("position")) or explicit_pos,
