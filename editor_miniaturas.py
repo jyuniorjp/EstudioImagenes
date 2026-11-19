@@ -103,6 +103,7 @@ def _log(where):
 
 
 class ThumbEditor(ctk.CTkToplevel):
+    _tema_iconos = True                   # tema de botones de ui_iconos
     def __init__(self, master, start_image=None, title=None, title_style=None, project=None):
         super().__init__(master)
         self.title("Editor de miniaturas")

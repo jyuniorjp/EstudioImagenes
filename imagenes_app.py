@@ -19,6 +19,7 @@ import ui_scroll
 ui_scroll.install()             # la rueda mueve solo lo que está bajo el ratón (ver ui_scroll.py)
 
 import ui_iconos                # iconos e ilustraciones dibujados por el propio Estudio
+ui_iconos.install()             # tema de botones: iconos propios, esquinas y bordes (ver ui_iconos.py)
 from PIL import Image
 
 import imagen_ia as ia
@@ -138,6 +139,7 @@ class ImageStudio(ctk.CTkFrame):
 
     def __init__(self, master, on_use=None, use_label="Usar como portada", standalone=False):
         super().__init__(master, fg_color=BG, corner_radius=0)
+        self._tema_iconos = True          # tema de botones (ui_iconos) dentro del Estudio
         self.on_use, self.cancel, self.busy = on_use, threading.Event(), False
         self.started_server = False
         self.current = None
@@ -160,7 +162,9 @@ class ImageStudio(ctk.CTkFrame):
         right.grid(row=0, column=1, sticky="nsew", padx=(6, 12), pady=12)
 
         # ---- controles
-        ctk.CTkLabel(left, text="🎨  " + APP, font=font(18, "bold"), text_color=TXT).pack(anchor="w", padx=8, pady=(6, 2))
+        logo = ui_iconos.art("crear", (36, 36))          # logo dibujado por el propio Estudio
+        ctk.CTkLabel(left, text=("  " if logo else "🎨  ") + APP, image=logo, compound="left", font=font(19, "bold"),
+                     text_color=TXT).pack(anchor="w", padx=8, pady=(6, 2))
         ctk.CTkLabel(left, text="Todo se hace en tu PC, sin internet.", font=font(12), text_color=MUTED).pack(anchor="w", padx=8)
         self._label(left, "Describe la imagen (puede ser en español)")
         self.txt = ctk.CTkTextbox(left, height=120, fg_color=SURF2, border_color=LINE, border_width=1, wrap="word",
@@ -295,8 +299,9 @@ class ImageStudio(ctk.CTkFrame):
         ctk.CTkLabel(left, text="El mismo modelo agranda y repasa los detalles finos. Tarda ~2x.", font=font(11),
                      text_color=MUTED, justify="left", wraplength=300).pack(anchor="w", padx=8)
 
-        self.btn = ctk.CTkButton(left, text="Crear imagen", height=42, font=font(15, "bold"), fg_color=CYAN_D,
-                                 hover_color=CYAN, text_color="#ffffff", command=self.toggle)
+        self.btn = ctk.CTkButton(left, text="Crear imagen", height=50, corner_radius=14, font=font(16, "bold"),
+                                 fg_color=CYAN_D, hover_color="#0e94a8", border_width=2, border_color="#3fd5ec",
+                                 text_color="#ffffff", command=self.toggle)
         self.btn.pack(fill="x", padx=8, pady=(16, 6))
         self.pb = ctk.CTkProgressBar(left, progress_color=CYAN, fg_color=SURF2)
         self.pb.set(0)
@@ -337,15 +342,15 @@ class ImageStudio(ctk.CTkFrame):
                 if png:
                     try:
                         with Image.open(png) as im:
-                            img = ctk.CTkImage(im.convert("RGBA").resize((40, 40), Image.Resampling.LANCZOS),
-                                               size=(40, 40))
+                            img = ctk.CTkImage(im.convert("RGBA").resize((34, 34), Image.Resampling.LANCZOS),
+                                               size=(34, 34))
                     except Exception:
                         img = None
                 self._icon_imgs[key] = img
-                b = ctk.CTkButton(irow, image=img, text="" if img else name[:3], width=52, height=52,
+                b = ctk.CTkButton(irow, image=img, text="" if img else name[:3], width=46, height=46,
                                   fg_color=CYAN_D if key == self.icon_theme else "transparent", hover_color=SURF3,
                                   border_width=0, command=lambda k=key: self.set_icon_theme(k))
-                b.pack(side="left", padx=(0, 4))
+                b.pack(side="left", padx=(0, 3))
                 self._icon_btns[key] = b
             self.lbl_icon = ctk.CTkLabel(left, text="", font=font(11), text_color=MUTED)
             self.lbl_icon.pack(anchor="w", padx=8)
@@ -357,9 +362,15 @@ class ImageStudio(ctk.CTkFrame):
         top = ctk.CTkFrame(right, fg_color="transparent")
         top.grid(row=0, column=0, sticky="ew", padx=12, pady=(10, 0))
         self.v_page = ctk.StringVar(value=PAGE_INSP)
-        ctk.CTkSegmentedButton(top, values=[PAGE_INSP, PAGE_MINE], variable=self.v_page, command=self.show_page,
-                               font=font(13, "bold"), height=34, selected_color=CYAN_D, selected_hover_color=CYAN,
-                               unselected_color=SURF2, unselected_hover_color=SURF3).pack(side="left")
+        tabs = ctk.CTkFrame(top, fg_color=SURF2, corner_radius=14, border_width=1, border_color=LINE)
+        tabs.pack(side="left")
+        self._tabs = {}
+        for name, ico, label in ((PAGE_INSP, "inspiracion", "Inspiración"), (PAGE_MINE, "galeria", "Mis imágenes")):
+            b = ctk.CTkButton(tabs, text=label, image=ui_iconos.icon(ico, 22), compound="left", height=38, width=160,
+                              corner_radius=11, font=font(14, "bold"), fg_color="transparent", hover_color=SURF3,
+                              text_color=MUTED, command=lambda n=name: self.show_page(n))
+            b.pack(side="left", padx=4, pady=4)
+            self._tabs[name] = b
         self.lbl_count = ctk.CTkLabel(top, text="", font=font(12), text_color=MUTED)
         self.lbl_count.pack(side="right")
         self.page_insp = ctk.CTkScrollableFrame(right, fg_color="transparent")
@@ -516,6 +527,10 @@ class ImageStudio(ctk.CTkFrame):
     def show_page(self, name=None):
         name = name or self.v_page.get()
         self.v_page.set(name)
+        for tab_name, b in getattr(self, "_tabs", {}).items():
+            on = tab_name == name
+            b.configure(fg_color=CYAN_D if on else "transparent", hover_color=CYAN_D if on else SURF3,
+                        text_color="#ffffff" if on else MUTED)
         if name == PAGE_MINE:
             self.page_insp.grid_remove()
             self.page_mine.grid()
@@ -1051,7 +1066,10 @@ class ImageStudio(ctk.CTkFrame):
 
     # ---------------------------------------------------------------- piezas de interfaz
     def _label(self, parent, text):
-        ctk.CTkLabel(parent, text=text, font=font(12, "bold"), text_color=TXT).pack(anchor="w", padx=8, pady=(12, 3))
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(anchor="w", fill="x", padx=8, pady=(14, 4))
+        ctk.CTkFrame(row, width=4, height=16, corner_radius=2, fg_color=CYAN).pack(side="left", padx=(0, 7))
+        ctk.CTkLabel(row, text=text, font=font(12, "bold"), text_color=TXT).pack(side="left")
 
     def _menu(self, parent, values, var, cmd=None):
         m = ctk.CTkOptionMenu(parent, values=values, variable=var, fg_color=SURF3, button_color=SURF3,
@@ -1510,6 +1528,7 @@ def load_examples():
 
 
 class ExamplesWindow(ctk.CTkToplevel):
+    _tema_iconos = True
     """Ejemplos reales (imagen + lo que se escribió + qué modelo eligió la IA) y consejos para mejores prompts."""
 
     def __init__(self, master, on_pick=None):
@@ -1585,6 +1604,7 @@ class ExamplesWindow(ctk.CTkToplevel):
 
 
 class SetupWindow(ctk.CTkToplevel):
+    _tema_iconos = True
     """Explica qué hace falta, cuánto pesa y lo instala todo con un botón (instalar_ia)."""
 
     def __init__(self, master, on_done=None):
@@ -1829,6 +1849,7 @@ def open_window(master, on_use=None, use_label="Usar como portada"):
 def main():
     ctk.set_appearance_mode("dark")
     root = ctk.CTk()
+    root._tema_iconos = True           # en la app aparte, el tema de botones va en todas sus ventanas
     root.title(APP)
     root.geometry("1200x780")
     root.minsize(900, 600)

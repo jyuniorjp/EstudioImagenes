@@ -208,5 +208,32 @@ class Iconos(unittest.TestCase):
                 self.assertLess(im.getchannel("A").getextrema()[0], 10, name)   # tiene partes transparentes
 
 
+
+class TestTemaBotones(unittest.TestCase):
+    def test_icono_sigue_al_texto(self):
+        import customtkinter as ctk
+        import ui_iconos
+        ui_iconos.install()
+        try:
+            root = ctk.CTk()
+        except Exception:
+            self.skipTest("sin pantalla")
+        try:
+            fuera = ctk.CTkButton(root, text="📁 Abrir", height=28)      # fuera del Estudio: sin tocar
+            self.assertEqual(fuera.cget("text"), "📁 Abrir")
+            root._tema_iconos = True
+            b = ctk.CTkButton(root, text="Crear imagen")
+            self.assertIsNotNone(b.cget("image"))
+            b.configure(text="Cancelar")
+            self.assertIsNone(b.cget("image"))
+            b.configure(text="Crear imagen")
+            self.assertIsNotNone(b.cget("image"))
+            c = ctk.CTkButton(root, text="📁 Abrir", fg_color=ui_iconos.SURF3)
+            self.assertEqual(c.cget("text"), "Abrir")
+            self.assertEqual(c.cget("border_width"), 1)
+        finally:
+            root.destroy()
+
+
 if __name__ == "__main__":
     unittest.main()
