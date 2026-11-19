@@ -348,7 +348,7 @@ _CHAR_NEG = ("cropped, out of frame, cut off, scenery, detailed background, sky,
 
 # ------------------------------------------------------------------ ¿una sola imagen o por capas?
 MODE_CFG = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "AudioNovelaStudio", "forma.json")
-MODES = {"Automática": "auto", "Una imagen": "single", "Por capas": "layers"}
+MODES = {"Una imagen": "single", "Por capas": "layers", "Automática": "auto"}
 _INTERACT = re.compile(
     r"\b(montad[oa]s?|monta|cabalga\w*|riding|rides?|abraz\w*|hug\w*|en (sus )?brazos|in (his|her|their) arms|"
     r"carg(a|ando|ada|ado)|sostenid[oa] por|en la mano del?|in the hand of|sobre el lomo|on the back of|"
@@ -360,22 +360,22 @@ def mode_choice():
     try:
         with open(MODE_CFG, encoding="utf-8") as f:
             v = json.load(f).get("forma")
-        return v if v in MODES else "Automática"
+        return v if v in MODES else "Una imagen"
     except Exception:
-        return "Automática"
+        return "Una imagen"
 
 
 def set_mode(name):
     try:
         os.makedirs(os.path.dirname(MODE_CFG), exist_ok=True)
         with open(MODE_CFG, "w", encoding="utf-8") as f:
-            json.dump({"forma": name if name in MODES else "Automática"}, f)
+            json.dump({"forma": name if name in MODES else "Una imagen"}, f)
     except OSError:
         pass
 
 
 def mode_wish():
-    return MODES.get(mode_choice(), "auto")
+    return MODES.get(mode_choice(), "single")
 
 
 def decide_mode(text, tp, saved=None, ref_chars=(), wish="auto"):
@@ -404,6 +404,134 @@ def decide_mode(text, tp, saved=None, ref_chars=(), wish="auto"):
     if c.get("_user_pos") and re.search(r"\b(grande|mediano|mediana|pequeñ[oa]|large|big|medium|small)\b", low):
         return "layers", "Pediste el lugar y el tamaño exactos del personaje: por capas, para respetarlos."
     return "single", "Un personaje integrado en la escena: una sola imagen, más natural y rápida."
+
+
+# ------------------------------------------------------------------ una sola imagen con un prompt «estilo ChatGPT»
+_CHAT_SYS = (
+    "You are an expert prompt writer for top image generators (like the ones ChatGPT uses). Turn the user's request "
+    "(often Spanish) into ONE rich English paragraph of 140-260 words that describes the FINAL YouTube thumbnail as a "
+    "single finished picture: art style and mood first; then every subject with ALL the details the user wrote "
+    "(gender, age, looks, hair, eyes, expression, clothes and armor with colors, weapons and which hand, effects, "
+    "actions and how subjects interact); the composition (what is on the left, right, foreground, background, how big); "
+    "lighting, color palette and camera framing. Then the text: every text the user wants written goes in double "
+    "quotes EXACTLY as written (same accents and capitals), with its font look, color, outline, glow, size and "
+    "position, and say that no other text appears. Translate faithfully (hoz = sickle, guadaña = scythe, hacha = axe, "
+    "espada = sword, lanza = spear, daga = dagger); never omit anything the user wrote and never add objects, places "
+    "or creatures the user did not mention. Answer ONLY with JSON: {\"prompt\": the paragraph, \"must\": 3-6 very short "
+    "English checks a viewer can verify (gender of each person first), \"anime\": true if anime/manga/manhwa style}.")
+
+
+def chatgpt_prompt(text, model=None):
+    """Qwen escribe el pedido como un prompt de ChatGPT; Gemma lo revisa contra TU texto. -> (prompt, must, nota)."""
+    model = model if model is not None else ia.ensure_ollama()
+    prompt, must, anime = "", [], "anime" in text.lower() or "manhwa" in text.lower()
+    if model:
+        try:
+            raw = ia._ollama(_CHAT_SYS, text, model, timeout=150, fmt="json")
+            d = json.loads(raw[raw.find("{"):raw.rfind("}") + 1])
+            prompt = str(d.get("prompt") or "").strip()
+            must = [str(x) for x in (d.get("must") or []) if str(x).strip()] if isinstance(d.get("must"), list) else []
+            anime = bool(d.get("anime", anime))
+        except Exception:
+            pass
+    if not prompt:
+        prompt = ia.to_english(text, model)
+    note = ""
+    if ia.vision_model():                          # revisión PREVIA: Gemma compara con tu texto original
+        fixed, rep = ia.review_draft(text, {"prompt": prompt, "must": []})
+        prompt = fixed.get("prompt") or prompt
+        if fixed.get("must"):
+            must = fixed["must"]
+        note = ia.review_note(rep)
+    must = ia.relevant_checks(must, prompt, text)[:5]
+    return prompt, must, anime, note
+
+
+def build_chatgpt(text, say, cancel, have, ref_bg, versions, stamp, model=None, on_plan=None, why=""):
+    """Una sola imagen, como ChatGPT: un prompt muy descriptivo y la IA dibuja todo, título incluido. Gemma revisa
+    la imagen (también que el título esté bien escrito) y se repite reforzando lo que falte. Si la IA no logra
+    escribir bien el título, la app lo pone encima con letras perfectas."""
+    say("Tu IA escribe el prompt como para ChatGPT y Gemma lo revisa contra tu texto (~1 min)…", .02)
+    prompt, must, anime, note = chatgpt_prompt(text, model)
+    quotes = [q.strip() for q in re.findall(r'[«"“]([^»"”]{1,60})[»"”]', text) if q.strip()]
+    title = max(quotes, key=len) if quotes else ""
+    subtitle = next((q for q in quotes if q != title), "")
+    text_checks = [f'the text "{q}" is written correctly, letter by letter' for q in (title, subtitle) if q]
+    spec = ia.title_spec(text)
+    tp = {"mode": "single", "mode_reason": why, "background": prompt, "prompt_full": prompt, "characters": [],
+          "title": title, "subtitle": subtitle, "title_style": spec["style"], "title_spec": spec,
+          "review_note": note, "anime": anime, "embers": False, "glow": ""}
+    if on_plan:
+        try:
+            on_plan(tp)
+        except Exception:
+            pass
+    eng = "Alta calidad (Z-Image Turbo)" if "Alta calidad (Z-Image Turbo)" in have else have[0]
+    neg = "blurry, low quality, deformed, bad anatomy, watermark, signature, misspelled text, extra text"
+    full = prompt + (" Modern anime manhwa digital illustration, sharp clean linework." if anime else "") + \
+        " Professional YouTube thumbnail, ultra detailed, sharp focus."
+    checks = (must + text_checks)[:7]
+    ia.free_ollama_gpu()
+    ia.start(say=lambda m, f: say(m, .05), cancel=cancel)
+    img = os.path.join(WORK, f"auto_unica_{stamp}.png")
+    best, best_miss, best_text_ok = None, None, False
+    tries = 3 if text_checks else 2
+    for attempt in range(tries):
+        if cancel is not None and cancel.is_set():
+            raise RuntimeError("CANCELLED")
+        out = img if attempt == 0 else img.replace(".png", f"_{attempt}.png")
+        ia.generate(ia.emphasize(full, best_miss or []), out, eng, (1344, 768), "", cancel=cancel, negative=neg,
+                    init_image=ref_bg, strength=.6,
+                    say=lambda m, f, a=attempt: say(("Imagen: " if not a else f"Intento {a + 1}: ") + m, .08 + .8 * f))
+        if not checks or not ia.vision_model():
+            best, best_text_ok = out, True
+            break
+        say("Tu IA revisa la imagen y lee el título letra por letra…", None)
+        miss = [m for m in ia.verify_image(out, must) if m] if must else []
+        text_ok = True
+        if text_checks:
+            r = ia.text_ok(out, [q for q in (title, subtitle) if q])
+            text_ok = r if r is not None else not ia.verify_image(out, text_checks)
+            if not text_ok:
+                miss = miss + text_checks
+        if best_miss is None or (text_ok, -len(miss)) > (best_text_ok, -len(best_miss)):
+            best, best_miss, best_text_ok = out, miss, text_ok
+        if not miss:
+            break
+        say("A la imagen le falta: " + "; ".join(miss) + ". La dibujo otra vez reforzando eso…", None)
+    ia.release_vision()
+    if best != img:
+        Image.open(best).save(img)
+    tp["background_missing"] = [m for m in (best_miss or []) if m not in text_checks]
+    alts = []
+    for j in range(max(0, int(versions) - 1)):   # versiones B y C: otra imagen con el mismo prompt
+        if cancel is not None and cancel.is_set():
+            raise RuntimeError("CANCELLED")
+        p = img.replace(".png", f"_v{j + 2}.png")
+        ia.generate(ia.emphasize(full, best_miss or []), p, eng, (1344, 768), "", cancel=cancel, negative=neg,
+                    init_image=ref_bg, strength=.6, say=lambda m, f, j=j: say(f"Versión {'BC'[j]}: " + m, None))
+        alts.append(p)
+    layers = [{"kind": "image", "path": img, "cover": True, "x": .5, "y": .5}]
+    shade_side = "top"
+    if title and not best_text_ok:               # el seguro: la IA no logró escribirlo bien -> letras perfectas
+        # esa imagen ya tiene el título mal escrito: se dibuja la escena SIN texto y la app pone las letras
+        say("La IA no logró escribir bien el título: dibujo la escena sin texto y lo pongo yo con letras "
+            "perfectas…", None)
+        notext = re.sub(r'[«"“][^»"”]{1,60}[»"”]', "", full)
+        notext = re.sub(r"\s{2,}", " ", notext) + " Absolutely no text, no letters, no title, no words anywhere."
+        ia.start(say=lambda m, f: say(m, None), cancel=cancel)
+        ia.generate(notext, img, eng, (1344, 768), "", cancel=cancel, negative=neg + ", text, letters, words",
+                    init_image=ref_bg, strength=.6, say=lambda m, f: say("Escena sin texto: " + m, None))
+        tp["title_place"] = ""
+        shade_side = _add_texts(text, tp, spec, layers)
+        tp["mode_reason"] = (why + " La IA no escribió bien el título, así que lo puso la app con letras perfectas.")
+    proj = {"size": [1280, 720], "layers": layers, "alt_backgrounds": alts, "mode": "single",
+            "lock": {"layout": True, "style": True},
+            "fx": {"shade": .45 if len(layers) > 1 else 0, "shade_side": shade_side, "vignette": .25,
+                   "embers": 0, "embers_color": dominant_light(img)}}
+    say("Miniatura lista.", 1.0)
+    return proj, tp
+
 
 
 def build_single(text, tp, spec, say, cancel, have, ref_bg, versions, stamp):
@@ -562,11 +690,16 @@ def build(text, say=None, cancel=None, have=None, refs=(), screen=None, versions
     ref_chars = [r for r in refs if _has_alpha(r)]
     ref_bg = next((r for r in refs if r not in ref_chars), None)
     model = ia.ensure_ollama()
-    say("Tu IA separa el pedido en capas (fondo, personajes, título)…", .02)
     saved = find_saved(text)
+    wish = mode or mode_wish()
+    if not (saved or ref_chars) and wish != "layers":
+        why = ("Una sola imagen, como ChatGPT: tu IA escribe un prompt muy descriptivo y dibuja todo junto, título "
+               "incluido." if wish == "single" else "Automática: una sola imagen, como ChatGPT.")
+        return build_chatgpt(text, say, cancel, have, ref_bg, versions, stamp, model, on_plan, why)
+    say("Tu IA separa el pedido en capas (fondo, personajes, título)…", .02)
     tp = thumb_plan(text, model, tuple(saved))
     spec = tp.get("title_spec") or ia.title_spec(text)
-    form, why = decide_mode(text, tp, saved, ref_chars, mode or mode_wish())
+    form, why = decide_mode(text, tp, saved, ref_chars, wish)
     tp["mode"], tp["mode_reason"] = form, why
     if on_plan:                                   # la app muestra al instante lo que se va a dibujar (en inglés)
         try:
@@ -1042,3 +1175,86 @@ def improve(proj, target=POLISH_TARGET, rounds=4, say=None, cancel=None, work_pn
     except Exception:
         pass
     return best, best_score, history
+
+
+def chapter_label(names):
+    """«Capítulo 6: …» -> «CAP 6»; varios -> «CAP 1-5»; sin números -> el nombre corto en mayúsculas."""
+    nums = []
+    for n in names:
+        m = re.search(r"\b(?:cap[íi]tulo|cap\.?|chapter|ch\.?)\s*(\d+)", str(n), re.I) or re.search(r"\b(\d+)\b", str(n))
+        if m:
+            nums.append(int(m.group(1)))
+    if nums:
+        a, b = min(nums), max(nums)
+        return f"CAP {a}" if a == b else f"CAP {a}-{b}"
+    return (str(names[0]) if names else "")[:24].upper()
+
+
+def auto_cover(chapter_text, story, label, write, bible, out_png, say=None, cancel=None, vertical=False):
+    """Miniatura automática de un capítulo (título de la obra + «CAP 6»), como tus ejemplos: un prompt estilo
+    ChatGPT con el texto dibujado por la IA; Gemma revisa que esté bien escrito y, si no lo logra, la app pone
+    las letras perfectas sobre la escena sin texto. Devuelve la ruta."""
+    say = say or (lambda *_: None)
+    title = (story or "").strip().upper()[:40]
+    texts = [(title, "Top")] + ([(label, "Bottom center, smaller, on an ornamental plaque")] if label else [])
+    pp = ia.poster_prompt(chapter_text, story, bible, write, vertical, texts=[t for t in texts if t[0]])
+    if not pp:
+        raise RuntimeError("no se pudo escribir el prompt de la miniatura")
+    full = ia.drawable(pp, keep_text=True)
+    size = (768, 1344) if vertical else (1344, 768)
+    eng = "Alta calidad (Z-Image Turbo)"
+    neg = "blurry, low quality, deformed, bad anatomy, misspelled text, extra text, watermark, signature"
+    checks = [f'the text "{t}" is written correctly, letter by letter' for t, _w in texts if t]
+    ia.free_ollama_gpu()
+    ia.start(say=lambda m, f: say(m, None), cancel=cancel)
+    best, ok = None, False
+    for attempt in range(3):
+        if cancel is not None and cancel.is_set():
+            raise RuntimeError("CANCELLED")
+        p = out_png if attempt == 0 else out_png.replace(".png", f"_{attempt}.png")
+        ia.generate(full, p, eng, size, "", negative=neg, cancel=cancel,
+                    say=lambda m, f: say("Miniatura: " + m, f))
+        best = best or p
+        if not ia.vision_model():
+            ok = True
+            break
+        say("Tu IA lee el título letra por letra…", None)
+        good = ia.text_ok(p, [t for t, _w in texts if t])
+        if good is None:                            # no se pudo leer: la revisión de siempre
+            good = not ia.verify_image(p, checks)
+        if good:
+            best, ok = p, True
+            break
+    ia.release_vision()
+    for k in range(1, 3):                           # limpiar intentos
+        q = out_png.replace(".png", f"_{k}.png")
+        if q != best and os.path.isfile(q):
+            try:
+                os.remove(q)
+            except OSError:
+                pass
+    if ok:
+        if best != out_png:
+            os.replace(best, out_png)
+        return out_png
+    # el seguro: escena sin texto y letras perfectas encima
+    say("La IA no escribió bien el título: lo pongo yo con letras perfectas…", None)
+    ia.start(say=lambda m, f: say(m, None), cancel=cancel)
+    scene = os.path.join(WORK, "portada_sin_texto.png")
+    os.makedirs(WORK, exist_ok=True)
+    ia.generate(ia.drawable(pp), scene, eng, size, "", negative=neg + ", text, letters", cancel=cancel)
+    tp = {"title": title, "subtitle": label, "title_style": "Cromo épico", "title_place": "top",
+          "subtitle_place": "bottom"}
+    layers = [{"kind": "image", "path": scene, "cover": True, "x": .5, "y": .5}]
+    side = _add_texts("", tp, {"position": "top", "style": "Cromo épico"}, layers)
+    proj = {"size": [size[0], size[1]], "layers": layers,
+            "fx": {"shade": .5, "shade_side": side, "vignette": .4}}
+    img = M.render(proj, size[0] * 1920 // 1344, size[1] * 1920 // 1344 if not vertical else size[1] * 1080 // 768)
+    M.save_image(img.convert("RGB"), out_png)
+    for q in (best,):
+        if q and q != out_png and os.path.isfile(q):
+            try:
+                os.remove(q)
+            except OSError:
+                pass
+    return out_png

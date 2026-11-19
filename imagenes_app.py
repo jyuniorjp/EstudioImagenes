@@ -259,9 +259,10 @@ class ImageStudio(ctk.CTkFrame):
         ctk.CTkOptionMenu(frow, values=list(_ma.MODES), variable=self.v_form, width=130, font=font(12),
                           fg_color=SURF3, button_color=SURF3, button_hover_color=CYAN_D,
                           command=lambda v: _ma.set_mode(v)).pack(side="left", padx=8)
-        ctk.CTkLabel(left, text="Automática: tu IA elige. «Una imagen» (1-2 min): todo en una escena, ideal si los "
-                                "personajes interactúan. «Por capas» (5-12 min): cada cosa aparte, para tus personajes "
-                                "guardados y posiciones exactas. El título siempre con letras perfectas.",
+        ctk.CTkLabel(left, text="«Una imagen» (recomendado, 2-4 min): como ChatGPT, tu IA escribe un prompt muy "
+                                "descriptivo y dibuja todo junto, título incluido (si lo escribe mal, la app lo pone "
+                                "con letras perfectas). «Por capas» (5-12 min): cada cosa aparte; se usa sola si nombras "
+                                "un personaje guardado o subes su PNG.",
                      font=font(11), text_color=MUTED, justify="left", wraplength=300).pack(anchor="w", padx=8)
         srow = ctk.CTkFrame(left, fg_color="transparent")
         srow.pack(fill="x", padx=8, pady=(12, 0))
@@ -623,6 +624,13 @@ class ImageStudio(ctk.CTkFrame):
                                                          "con fondo transparente y título con letras perfectas)."))
             def show_plan(tp):
                 gen_es = {"female": "mujer", "male": "hombre"}
+                if tp.get("prompt_full"):                   # una imagen: el prompt completo que recibe la IA
+                    txt = ("FORMA: una imagen — " + tp.get("mode_reason", "") + "\n\nPROMPT:\n" + tp["prompt_full"] +
+                           ("\n\n" + tp["review_note"] if tp.get("review_note") else ""))
+                    why = " ".join(x for x in (tp.get("mode_reason"), tp.get("review_note")) if x)
+                    self._ui(lambda: (self.en.delete("1.0", "end"), self.en.insert("1.0", txt),
+                                      self.lbl_why.configure(text=why)))
+                    return
                 txt = (("FORMA: " + ("una imagen" if tp.get("mode") == "single" else "por capas") + " — " +
                         tp.get("mode_reason", "") + "\n\n" if tp.get("mode_reason") else "") +
                        "FONDO: " + tp.get("background", "") + "\n\nPERSONAJES:\n" +

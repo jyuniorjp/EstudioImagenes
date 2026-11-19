@@ -8,6 +8,7 @@ mensaje en español: quien llama decide qué hacer (la app nunca se cae por esto
 import json
 import os
 import random
+import re
 import shutil
 import subprocess
 import threading
@@ -546,11 +547,11 @@ def ensure_ollama(timeout=30):
     return ""
 
 
-def _ollama(system, user, model, timeout=120, fmt=None):
+def _ollama(system, user, model, timeout=120, fmt=None, num_ctx=4096):
     if model.startswith("qwen3"):
         user += " /no_think"
     body = {"model": model, "stream": False, "think": False, "keep_alive": "2m",
-            "options": {"temperature": 0.4, "num_ctx": 4096},
+            "options": {"temperature": 0.4, "num_ctx": num_ctx},
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
     if fmt:
         body["format"] = fmt
@@ -603,6 +604,156 @@ def scene_prompt(chapter_text, title="", model=None):
                        (f"Title: {title}\n" if title else "") + "Chapter excerpt:\n" + snippet, model)
     except Exception:
         return ""
+
+
+# ------------------------------------------------------------------ prompts «estilo ChatGPT» para el video
+EXAMPLES_FILE = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "AudioNovelaStudio",
+                             "ejemplos_prompts.txt")
+_SKELETON = """<style line: art style, format, quality, mood>
+
+<PRIORITY RULE (TOP PRIORITY): the one thing that must never fail, e.g. identical natural skin tones>
+
+LEFT CHARACTER — <NAME>:
+- <face, skin, hair, eyes, expression>
+- <clothing / armor with colors and materials>
+- <wings, weapon, aura, effects>
+- <pose and action in this moment>
+
+RIGHT CHARACTER — <NAME>:
+- <same structure>
+
+BACKGROUND:
+- <place, light, atmosphere, key objects>
+
+CONTRAST (ONLY in background and clothing):
+- <left half colors / right half colors, what unites them>
+
+No text, letters or watermark."""
+
+
+def prompt_examples(limit=2):
+    """Tus ejemplos de prompts (archivo editable). Sin archivo: un esqueleto con las secciones."""
+    try:
+        with open(EXAMPLES_FILE, encoding="utf-8") as f:
+            raw = f.read()
+        parts = [p.strip() for p in re.split(r"(?m)^={5,}\s*$", raw)]
+        ex = [p for p in parts if p and not all(l.startswith("#") for l in p.splitlines() if l.strip())]
+        if ex:
+            return ex[:limit]
+    except Exception:
+        pass
+    return [_SKELETON]
+
+
+def _json_from(txt):
+    try:
+        return json.loads(txt[txt.find("{"):txt.rfind("}") + 1])
+    except Exception:
+        return {}
+
+
+def local_writer(model=None):
+    """Escritor local: Qwen (JSON, sin recortar el texto)."""
+    model = model or ensure_ollama()
+    if not model:
+        return None
+
+    def write(system, user):
+        return _ollama(system, user, model, timeout=300, fmt="json", num_ctx=10240)
+    return write
+
+
+def story_bible(sample, title, write):
+    """Ficha fija de la obra: estilo y aspecto de cada personaje, para que salgan IGUALES en todas las imágenes."""
+    sys_p = ("You are the art director of an illustrated audio novel. From the story excerpt, decide the art style "
+             "that fits it (if it is a fanfic of a known anime/game/myth, say 'anime style inspired by <series>') and "
+             "list the main recurring characters (max 6) with a FIXED visual description in English that will be "
+             "reused in every illustration so they always look the same: gender, apparent age, face, skin tone "
+             "(natural and luminous), hair, eyes, typical clothes/armor with colors and materials, signature items "
+             "(wings, weapons, crowns, auras). Use what the text says; when it says nothing, choose something "
+             "coherent and keep it. Answer ONLY with JSON: {\"style\": \"...\", \"characters\": [{\"name\": \"...\", "
+             "\"look\": \"...\"}]}")
+    ex = "\n\n----- EXAMPLE -----\n".join(prompt_examples())
+    sys_p += (" The author also gave EXAMPLE prompts: if a character of this story appears in them, copy that look "
+              "and that art style exactly (the examples are the author's canon); ignore example characters that are "
+              "not in this story.")
+    d = _json_from(write(sys_p, (f"Title: {title}\n" if title else "") + "AUTHOR'S EXAMPLES:\n" + ex[:6000] +
+                         "\n\nStory excerpt:\n" + sample[:9000]) or "")
+    chars = [c for c in (d.get("characters") or []) if isinstance(c, dict) and c.get("name") and c.get("look")][:6]
+    return {"style": str(d.get("style") or ""), "characters": [{"name": str(c["name"]), "look": str(c["look"])}
+                                                               for c in chars]}
+
+
+_HEAD_MAP = ((r"^LEFT CHARACTER\s*[—–-]\s*", "On the left side of the picture, "),
+             (r"^RIGHT CHARACTER\s*[—–-]\s*", "On the right side of the picture, "),
+             (r"^CENT(?:ER|RE) CHARACTER\s*[—–-]\s*", "In the center of the picture, "),
+             (r"^BACKGROUND\b[^:\n]*", "Background"), (r"^CONTRAST\b[^:\n]*", "Color contrast"),
+             (r"^[A-Z][A-Z ]{2,}RULE\b[^:\n]*", "Most important"))
+_HEAD_COLON = ("Background", "Color contrast", "Most important")
+
+
+def drawable(prompt, keep_text=False):
+    """El prompt estructurado (como para ChatGPT) pasado a prosa para el modelo que dibuja: sin encabezados en
+    MAYÚSCULAS ni palabras gritadas, que Z-Image a veces escribe como letras dentro de la imagen («SKIN RULE»)."""
+    out = []
+    for line in prompt.splitlines():
+        l = line.strip()
+        if not l:
+            continue
+        if re.match(r"^TEXT\b", l):              # sección de texto: en el video no va; en la miniatura sí
+            if not keep_text:
+                break
+            out.append("Written text in the image:")
+            continue
+        for rx, rep_ in _HEAD_MAP:
+            l = re.sub(rx, rep_, l)
+        l = re.sub(r"^[-•]\s*", "", l)
+        # HADES -> Hades, pero lo que va entre comillas (el título que se escribe) queda tal cual
+        l = "".join(p if i % 2 else re.sub(r"\b([A-ZÁÉÍÓÚÑ]{3,})\b", lambda m: m.group(1).capitalize(), p)
+                    for i, p in enumerate(re.split(r'("[^"]*"|«[^»]*»)', l)))
+        l = re.sub(r"\byoutube thumbnail,?\s*", "", l, flags=re.I)
+        if l.rstrip(":") in _HEAD_COLON:            # «Background» solo -> «Background:» y sigue la frase
+            out.append(l.rstrip(":") + ":")
+            continue
+        out.append(l.rstrip(":") + ("" if l.endswith((".", ":")) else "."))
+    txt = " ".join(out)
+    txt = re.sub(r"\s{2,}", " ", txt).replace("..", ".")
+    if keep_text:
+        return txt + " The quoted words are the ONLY text in the image, spelled exactly, letter by letter."
+    return txt + " There is absolutely no writing, no letters and no words anywhere in the image."
+
+
+def poster_prompt(chapter_text, title, bible, write, vertical=False, texts=None):
+    """Un prompt detallado «estilo ChatGPT» para la imagen de un tramo del capítulo, imitando tus ejemplos.
+    Sin texto en la imagen (en el video van los subtítulos encima)."""
+    ex = "\n\n----- EXAMPLE -----\n".join(prompt_examples())
+    sheet = (f"ART STYLE: {bible.get('style')}\n" if bible.get("style") else "") + "\n".join(
+        f"- {c['name']}: {c['look']}" for c in bible.get("characters", []))
+    fmt = "9:16 vertical (1080×1920)" if vertical else "16:9 horizontal (1920×1080)"
+    sys_p = ("You are an expert prompt designer for top image generators (like ChatGPT images). Write ONE image prompt "
+             "for the most visual, emotional key moment of the given chapter excerpt, following EXACTLY the structure, "
+             "section headings and level of detail of the EXAMPLES (style line; a top-priority rule; LEFT CHARACTER / "
+             "RIGHT CHARACTER sections with face, skin, hair, eyes, expression, clothes, items, pose; BACKGROUND; "
+             "CONTRAST). Use the characters that are really in this moment (1 to 3; if only one, use a CENTER "
+             "CHARACTER section; if none, describe the place) and copy their looks from the CHARACTER SHEET so they "
+             "stay identical in every picture; their expressions, poses and actions come from the excerpt. "
+             f"Format: {fmt}. " + (
+                 "End with a TEXT section like the examples (custom ornate typography that fits the story), with "
+                 "EXACTLY these texts, copied letter by letter inside double quotes: " +
+                 "; ".join(f'{where}: "{t}"' for t, where in texts) + ". Then 'No other text or watermark.' "
+                 if texts else
+                 "The picture must contain NO text, NO letters, NO title and NO watermark: do not write any TEXT "
+                 "section and end with 'No text, letters or watermark.' ") +
+             "Never add the examples' characters if they are not in this story. English, max 420 words. Answer "
+             "ONLY with JSON: {\"prompt\": \"...\"}")
+    user = ("EXAMPLES (imitate their style, not their content):\n" + ex + "\n\n===== CHARACTER SHEET =====\n" +
+            (sheet or "(none)") + (f"\n\n===== STORY TITLE =====\n{title}" if title else "") +
+            "\n\n===== CHAPTER EXCERPT =====\n" + " ".join(chapter_text.split())[:5000])
+    d = _json_from(write(sys_p, user) or "")
+    p = str(d.get("prompt") or "").strip()
+    if p and not texts and not re.search(r"no text", p, re.I):
+        p += "\n\nNo text, letters or watermark."
+    return p
 
 
 # ------------------------------------------------------------------ modo automático: la IA elige el motor
@@ -1464,6 +1615,59 @@ def review_note(rep):
     if rep.get("invented"):
         parts.append("quité " + "; ".join(rep["invented"]))
     return "Revisión previa (Gemma): " + " · ".join(parts) + "."
+
+
+def read_text(path, model=None):
+    """Gemma copia, letra por letra, todo el texto que ve en la imagen (lista de líneas)."""
+    import base64
+    import io as _io
+    from PIL import Image as _I
+    model = model or fast_judge()
+    if not model:
+        return None
+    if running():
+        try:
+            _post("/free", {"unload_models": True, "free_memory": True}, 10)
+        except Exception:
+            pass
+    try:
+        with _I.open(path) as im:
+            im = im.convert("RGB")
+            im.thumbnail((1280, 1280))
+            buf = _io.BytesIO()
+            im.save(buf, "JPEG", quality=92)
+        body = {"model": model, "stream": False, "format": "json", "keep_alive": "3m",
+                "options": {"temperature": 0, "seed": 7, "num_ctx": 4096},
+                "messages": [{"role": "system", "content":
+                              "You are a careful OCR. Copy EXACTLY every piece of text written in the image, letter by "
+                              "letter, as you really see it (do not correct spelling, do not guess the intended word). "
+                              "Answer ONLY with JSON: {\"texts\": [\"...\"]}"},
+                             {"role": "user", "content": "Transcribe the text.",
+                              "images": [base64.b64encode(buf.getvalue()).decode()]}]}
+        req = urllib.request.Request(OLLAMA + "/api/chat", json.dumps(body).encode(),
+                                     {"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=300) as r:
+            txt = json.load(r).get("message", {}).get("content", "")
+        d = json.loads(txt[txt.find("{"):txt.rfind("}") + 1])
+        return [str(x) for x in d.get("texts") or [] if str(x).strip()]
+    except Exception:
+        return None
+
+
+def _plain(t):
+    import unicodedata
+    t = "".join(c for c in unicodedata.normalize("NFD", str(t).upper()) if unicodedata.category(c) != "Mn")
+    return re.sub(r"[^A-Z0-9Ñ]", "", t)
+
+
+def text_ok(path, expected, model=None):
+    """¿Están bien escritos los textos pedidos? Gemma transcribe y la app compara letra por letra (sin tildes ni
+    espacios, que el lector a veces no ve). None si no se pudo revisar."""
+    seen = read_text(path, model)
+    if seen is None:
+        return None
+    blob = _plain(" ".join(seen))
+    return all(_plain(e) in blob for e in expected if _plain(e))
 
 
 def release_vision(model=None):
